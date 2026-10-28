@@ -11,7 +11,7 @@ const load = () => { try { return JSON.parse(fs.readFileSync(FILE, 'utf8')); } c
 const save = db => fs.writeFileSync(FILE, JSON.stringify(db, null, 2) + '\n', { mode: 0o600 });
 const [cmd, name, ...rest] = process.argv.slice(2);
 const db = load();
-const askHidden = q => new Promise(r => { process.stdout.write(q); const si = process.stdin; si.setRawMode(true); si.resume(); let s = ''; si.on('data', c => { c = c.toString(); if (c === '\r' || c === '\n') { si.setRawMode(false); si.pause(); process.stdout.write('\n'); r(s); } else if (c === '\u0003') process.exit(1); else if (c === '\u007f') s = s.slice(0, -1); else s += c; }); });
+const askHidden = q => new Promise(r => { if (!process.stdin.isTTY) { console.error('Passworteingabe braucht ein Terminal-Fenster: bitte in der App Terminal ausführen.'); process.exit(1); } process.stdout.write(q); const si = process.stdin; si.setRawMode(true); si.resume(); let s = ''; si.on('data', c => { c = c.toString(); if (c === '\r' || c === '\n') { si.setRawMode(false); si.pause(); process.stdout.write('\n'); r(s); } else if (c === '\u0003') process.exit(1); else if (c === '\u007f') s = s.slice(0, -1); else s += c; }); });
 const parseIds = v => (v || '').split(',').map(Number).filter(Boolean);
 (async () => {
   if (cmd === 'add' && name) {
