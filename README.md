@@ -49,8 +49,29 @@ Der Betriebs-Mac braucht kein Internet, außer wenn ein iPhone eine iOS-Version 
 
 ## Zugriff für VAs (Phase 4)
 
-Der Server lauscht weiterhin nur auf 127.0.0.1. Nach außen kommt die Seite über Tailscale Serve oder Cloudflare Tunnel,
-beide leiten auf 127.0.0.1:3000 weiter. Der Mac selbst ist aus dem Internet nie erreichbar.
+Der Server lauscht weiterhin nur auf 127.0.0.1. Nach außen kommt die Seite über Tailscale Serve, das auf 127.0.0.1:3000
+weiterleitet. Der Mac selbst ist aus dem Internet nie erreichbar, die Seite nur für Mitglieder des Tailnets.
+
+### Tailscale einrichten (einmalig je Mac)
+
+1. Tailscale-App installieren und mit dem eigenen Konto anmelden.
+2. Freigabe: `/Applications/Tailscale.app/Contents/MacOS/Tailscale serve --bg --http=80 3000` (bleibt nach Neustart erhalten).
+   Adresse im Tailnet: http://<mac-name>.<tailnet>.ts.net, der Verkehr ist durch Tailscale verschlüsselt.
+   Mit HTTPS-Zertifikaten im Tailnet (Admin-Konsole > DNS > HTTPS Certificates) geht stattdessen `serve --bg 3000` und https://...
+3. VAs einladen: Admin-Konsole > Users > Invite. Jede VA installiert Tailscale auf ihrem Rechner und meldet sich an.
+4. VAs auf die Seite beschränken (Admin-Konsole > Access controls), den Mac vorher mit tag:phonelab versehen:
+
+```
+{
+  "tagOwners": { "tag:phonelab": ["autogroup:admin"] },
+  "acls": [
+    { "action": "accept", "src": ["autogroup:admin"],  "dst": ["*:*"] },
+    { "action": "accept", "src": ["autogroup:member"], "dst": ["tag:phonelab:80,443"] }
+  ]
+}
+```
+
+Damit erreichen VAs nur Port 80 und 443 des Macs, sonst nichts im Tailnet.
 
 - Benutzer anlegen: `node user.js add <name>` sieht alle Handys, `node user.js add <name> --handys 1,2,3` nur diese (Passwort wird abgefragt, mindestens 10 Zeichen, nur als Hash gespeichert).
   Admin, der alle Handys sieht: `node user.js add <name> --admin`. Weitere Befehle: `list`, `handys <name> 1,2`, `remove <name>`.
