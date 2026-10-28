@@ -5,3 +5,4 @@ node_modules/
 logs/
 DerivedData/
 .DS_Store
+.gstack/

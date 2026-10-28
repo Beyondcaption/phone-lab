@@ -67,8 +67,7 @@ function tile(d) {
   el.querySelector('.home').onclick = () => post(d.id, 'home');
   el.querySelector('.ig').onclick = () => post(d.id, 'instagram');
   el.querySelector('.zoom').onclick = () => el.classList.toggle('big');
-  img.onerror = () => { el.dataset.stream = '0'; setTimeout(() => img.src = `/stream/${d.id}?${Date.now()}`, 5000); };
-  img.onload = () => el.dataset.stream = '1';
+  img.onerror = () => setTimeout(() => img.src = `/stream/${d.id}?${Date.now()}`, 5000);
   return el;
 }
 
@@ -77,6 +76,7 @@ async function refresh() {
   for (const d of devs) {
     let el = document.getElementById('t' + d.id) || document.getElementById('grid').appendChild(tile(d));
     el.querySelector('.dot').classList.toggle('on', d.ready);
+    el.dataset.stream = el.querySelector('img').naturalWidth > 0 ? '1' : '0';
     el.querySelector('.st').textContent = (d.ready ? 'WDA läuft' : d.running ? 'WDA startet' : 'WDA aus')
       + (el.dataset.stream === '1' ? ', Stream' : ', kein Stream') + (d.battery != null ? `, Akku ${d.battery} %` : '');
   }
