@@ -143,7 +143,7 @@ async function startWda(dev) {
     if (!fs.existsSync(marker) || fs.statSync(marker).mtimeMs < fs.statSync(WDA_APP).mtimeMs) {
       await ios(['install', '--path=' + WDA_APP, '--udid=' + dev.udid], log);
       fs.writeFileSync(marker, new Date().toISOString());
-      console.log(`[${dev.name}] WDA installiert. Auf dem iPhone jetzt die Entwickler-App vertrauen (Einstellungen > Allgemein > VPN und Geräteverwaltung).`);
+      console.log(`[${dev.name}] WDA installiert.`);
     }
   } catch (e) {
     console.log(`[${dev.name}] Vorbereitung fehlgeschlagen: ${e.message}, neuer Versuch in 15 s`);

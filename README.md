@@ -31,7 +31,8 @@ Es gibt zwei Rollen von Macs:
 1. Archiv in den Benutzerordner, Doppelklick entpackt es.
 2. iPhones anstecken, auf jedem "Diesem Computer vertrauen".
 3. Im Ordner phone-lab Doppelklick auf `Start.command`. Es prüft das Paket, nimmt die iPhones auf, richtet den Autostart ein und öffnet die Kachel-Seite.
-4. Auf jedem iPhone einmal: Einstellungen > Allgemein > VPN und Geräteverwaltung > Entwickler-App vertrauen.
+4. Mit dem bezahlten Developer-Konto ist kein Vertrauens-Schritt auf dem iPhone nötig, WDA startet direkt.
+   (Nur bei einer kostenlosen Apple-ID: Einstellungen > Allgemein > VPN und Geräteverwaltung > Entwickler-App vertrauen.)
 
 Ohne Zutun nach Neustart des Macs: Systemeinstellungen > Benutzer > automatische Anmeldung einschalten (bei FileVault bleibt die
 Passworteingabe nach dem Neustart). Mac am Netzteil. Der Bildschirm darf ausgehen, der Mac selbst schläft nicht (caffeinate -is).
@@ -84,7 +85,7 @@ Damit erreichen VAs nur Port 80 und 443 des Macs, sonst nichts im Tailnet.
 
 ### Checkliste iPhones absichern (in dieser Reihenfolge)
 
-1. Zuerst WDA installieren und der Entwickler-App vertrauen (passiert beim ersten Start des Servers). Danach erst sperren,
+1. Zuerst WDA installieren (passiert beim ersten Start des Servers). Danach erst sperren,
    denn das Verbot "Apps installieren" blockiert auch die WDA-Installation.
 2. Kein Mail-Konto auf dem Handy (Einstellungen > Mail > Accounts). Instagram-2FA nicht auf demselben Handy.
 3. Bildschirmzeit mit eigenem Code: Einstellungen > Bildschirmzeit > Bildschirmzeit-Code festlegen (nicht der Geräte-Code).
@@ -93,7 +94,7 @@ Damit erreichen VAs nur Port 80 und 443 des Macs, sonst nichts im Tailnet.
 6. Beschränkungen > Erlaubte Apps: nur das Nötige (Instagram, Einstellungen bleibt). WDA zählt nicht als App in dieser Liste und läuft weiter.
 7. WLAN und Bluetooth aus lassen; Beschränkungen > Änderungen zulassen > Mobilfunkdaten-Änderungen "Nicht erlauben".
 
-Was WDA braucht und von den Sperren nicht berührt wird: Entwicklermodus (bleibt an), das Vertrauen der Entwickler-App, USB.
+Was WDA braucht und von den Sperren nicht berührt wird: Entwicklermodus (bleibt an), USB.
 Einmal im Jahr (neue Signatur) muss "Installieren" kurz wieder erlaubt werden, dann neues Paket einspielen, dann wieder sperren.
 
 ### Mac
