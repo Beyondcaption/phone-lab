@@ -35,7 +35,7 @@ function checkPassword(u, pw) {
   return crypto.timingSafeEqual(crypto.scryptSync(pw, Buffer.from(u.salt, 'hex'), 32), Buffer.from(u.hash, 'hex'));
 }
 function cookie(req) { const m = /(?:^|;\s*)pl=([a-f0-9]{48})/.exec(req.headers.cookie || ''); return m && sessions.get(m[1]); }
-const allowed = (u, dev) => u.admin || u.devices.includes(dev.id);
+const allowed = (u, dev) => u.admin || u.devices === 'all' || (Array.isArray(u.devices) && u.devices.includes(dev.id));
 const LOGIN_HTML = (msg = '') => `<!doctype html><html lang="de"><meta charset="utf-8"><title>phone-lab Login</title>
 <style>body{margin:0;background:#111;color:#ddd;font:15px system-ui;display:flex;align-items:center;justify-content:center;height:100vh}
 form{background:#1c1c1c;padding:24px;border-radius:8px;display:flex;flex-direction:column;gap:10px;width:260px}input,button{padding:8px;background:#222;color:#ddd;border:1px solid #444}button{cursor:pointer}.m{color:#e66;min-height:18px}</style>

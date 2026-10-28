@@ -52,7 +52,7 @@ Der Betriebs-Mac braucht kein Internet, außer wenn ein iPhone eine iOS-Version 
 Der Server lauscht weiterhin nur auf 127.0.0.1. Nach außen kommt die Seite über Tailscale Serve oder Cloudflare Tunnel,
 beide leiten auf 127.0.0.1:3000 weiter. Der Mac selbst ist aus dem Internet nie erreichbar.
 
-- Benutzer anlegen: `node user.js add <name> --handys 1,2,3` (Passwort wird abgefragt, mindestens 10 Zeichen, nur als Hash gespeichert).
+- Benutzer anlegen: `node user.js add <name>` sieht alle Handys, `node user.js add <name> --handys 1,2,3` nur diese (Passwort wird abgefragt, mindestens 10 Zeichen, nur als Hash gespeichert).
   Admin, der alle Handys sieht: `node user.js add <name> --admin`. Weitere Befehle: `list`, `handys <name> 1,2`, `remove <name>`.
 - users.json liegt nicht im git und nicht im Paket. Ohne Benutzer startet der Server nicht.
 - Jede VA sieht nur ihre Handys. Ein Handy ist belegt, solange jemand in den letzten 2 Minuten einen Befehl geschickt hat;
