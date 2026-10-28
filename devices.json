@@ -1,0 +1,7 @@
+{
+  "team_id": "3ZC8NCF6MD",
+  "wda_bundle_id": "com.cansap.phonelab.wda",
+  "devices": [
+    { "id": 1, "name": "Handy 1", "udid": "00008110-001A5C613498401E", "wda_port": 8101, "mjpeg_port": 9101 }
+  ]
+}
