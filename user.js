@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Benutzer für die Kachel-Seite verwalten. Passwörter werden nur als Hash gespeichert (scrypt), nie im Klartext.
-//   node user.js add <name> [--admin] [--handys 1,2,3]    Passwort wird abgefragt, nicht angezeigt. Ohne --handys: sieht alle Handys
+//   node user.js add <name> [--admin] [--handys 1,2,3]    Passwort kommt per Dialog. Ohne --handys: sieht alle Handys
 //   node user.js handys <name> 1,2,3|alle                  Zuteilung ändern
 //   node user.js list
 //   node user.js passwort <name>                           Passwort neu setzen
@@ -12,15 +12,11 @@ const load = () => { try { return JSON.parse(fs.readFileSync(FILE, 'utf8')); } c
 const save = db => fs.writeFileSync(FILE, JSON.stringify(db, null, 2) + '\n', { mode: 0o600 });
 const [cmd, name, ...rest] = process.argv.slice(2);
 const db = load();
-// Passwort ohne Anzeige: im Terminal direkt, sonst (z. B. aus Claude Code) über einen macOS-Dialog
+// Passwort ohne Anzeige über einen macOS-Dialog. Die Terminal-Eingabe hat zweimal falsche Passwörter erzeugt, deshalb nur noch Dialog.
 const askHidden = q => new Promise(r => {
-  if (!process.stdin.isTTY) {
-    const out = require('child_process').spawnSync('osascript', ['-e', `text returned of (display dialog ${JSON.stringify(q)} default answer "" with hidden answer with title "phone-lab")`], { encoding: 'utf8' });
-    if (out.status !== 0) { console.error('abgebrochen'); process.exit(1); }
-    return r(out.stdout.replace(/\n$/, ''));
-  }
-  process.stdout.write(q); const si = process.stdin; si.setRawMode(true); si.resume(); let s = '';
-  si.on('data', c => { c = c.toString(); if (c === '\r' || c === '\n') { si.setRawMode(false); si.pause(); process.stdout.write('\n'); r(s); } else if (c === '\u0003') process.exit(1); else if (c === '\u007f') s = s.slice(0, -1); else s += c; });
+  const out = require('child_process').spawnSync('osascript', ['-e', `text returned of (display dialog ${JSON.stringify(q)} default answer "" with hidden answer with title "phone-lab")`], { encoding: 'utf8' });
+  if (out.status !== 0) { console.error('abgebrochen'); process.exit(1); }
+  r(out.stdout.replace(/\n$/, ''));
 });
 const parseIds = v => !v || v === 'alle' ? 'all' : v.split(',').map(Number).filter(Boolean);
 (async () => {
