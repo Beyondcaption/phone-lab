@@ -15,6 +15,13 @@
       "udid": "00008110-000105503E6A201E",
       "wda_port": 8102,
       "mjpeg_port": 9102
+    },
+    {
+      "id": 3,
+      "name": "Handy 3",
+      "udid": "00008110-00063D801E7B801E",
+      "wda_port": 8103,
+      "mjpeg_port": 9103
     }
   ]
 }
