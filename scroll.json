@@ -1,0 +1,7 @@
+{
+  "devices": [3],
+  "sessions_per_day": [2, 4],
+  "minutes": [10, 20],
+  "window": ["09:00", "23:00"],
+  "niche": "Gaming, Cosplay, Alternative Szene"
+}

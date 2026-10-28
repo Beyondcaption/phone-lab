@@ -44,8 +44,9 @@ function wda(dev, method, p, body, timeout = 15000) {
 
 async function session(dev) {
   if (dev.sid) return dev.sid;
-  const r = await wda(dev, 'POST', '/session', { capabilities: { alwaysMatch: {} } });
-  dev.sid = r.sessionId;
+  // Bestehende WDA-Sitzung übernehmen (z. B. von scroll.js), sonst anlegen. WDA hat immer nur eine.
+  const st = await wda(dev, 'GET', '/status');
+  dev.sid = st.sessionId || (await wda(dev, 'POST', '/session', { capabilities: { alwaysMatch: {} } })).sessionId;
   const size = (await wda(dev, 'GET', `/session/${dev.sid}/window/size`)).value;
   dev.w = size.width; dev.h = size.height;
   await wda(dev, 'POST', `/session/${dev.sid}/appium/settings`, { settings: SETTINGS }).catch(() => {});
