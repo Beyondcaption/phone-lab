@@ -20,7 +20,7 @@ command -v node >/dev/null && ok "node $(node -v)" || { ask "brew install node?"
 
 echo "== Appium + XCUITest-Treiber =="
 command -v appium >/dev/null && ok "appium $(appium -v)" || { ask "npm install -g appium?" && npm install -g appium; }
-appium driver list --installed 2>/dev/null | grep -q xcuitest && ok "xcuitest-Treiber" || { ask "appium driver install xcuitest?" && appium driver install xcuitest; }
+appium driver list --installed 2>&1 | grep -q xcuitest && ok "xcuitest-Treiber" || { ask "appium driver install xcuitest?" && appium driver install xcuitest; }
 
 echo "== Apple-ID in Xcode =="
 TEAM=$(defaults read com.apple.dt.Xcode IDEProvisioningTeamByIdentifier 2>/dev/null | grep -m1 teamID | sed 's/.*= *//; s/[";]//g')
