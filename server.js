@@ -16,7 +16,7 @@ const IOS = fs.existsSync(path.join(ROOT, 'bin', 'ios')) ? path.join(ROOT, 'bin'
 const WDA_APP = path.join(ROOT, 'wda', 'WebDriverAgentRunner-Runner.app');
 const BUNDLE = CFG.wda_bundle_id + '.xctrunner';
 // waitForIdleTimeout 0 und animationCoolOffTimeout 0: WDA wartet nicht auf Ruhe der App, Eingaben kommen sofort an
-const SETTINGS = { mjpegServerFramerate: 12, mjpegScalingFactor: 60, mjpegServerScreenshotQuality: 50, waitForIdleTimeout: 0, animationCoolOffTimeout: 0 };
+const SETTINGS = { mjpegServerFramerate: 15, mjpegScalingFactor: 60, mjpegServerScreenshotQuality: 50, waitForIdleTimeout: 0, animationCoolOffTimeout: 0 };
 
 fs.mkdirSync(path.join(ROOT, 'logs'), { recursive: true });
 const logFile = name => fs.openSync(path.join(ROOT, 'logs', name), 'a');
@@ -73,7 +73,8 @@ const cmd = {
   // Wischt entlang der Mausspur: path = [{x,y,t}], t in ms ab Start, x/y als Anteil 0..1
   swipe: (dev, { path }) => {
     if (!Array.isArray(path) || path.length < 2) throw new Error('swipe braucht path');
-    const pts = path.slice(-60).map(p => ({ ...px(dev, +p.x || 0, +p.y || 0), t: Math.max(0, +p.t || 0) }));
+    const cl = v => Math.min(1, Math.max(0, +v || 0));
+    const pts = path.slice(-40).map(p => ({ ...px(dev, cl(p.x), cl(p.y)), t: Math.max(0, +p.t || 0) }));
     const steps = [{ type: 'pointerMove', duration: 0, x: pts[0].x, y: pts[0].y }, { type: 'pointerDown', button: 0 }];
     for (let i = 1; i < pts.length; i++) steps.push({ type: 'pointerMove', duration: Math.min(1000, Math.max(10, pts[i].t - pts[i - 1].t)), x: pts[i].x, y: pts[i].y });
     steps.push({ type: 'pointerUp', button: 0 });
