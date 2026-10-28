@@ -6,6 +6,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
+const crypto = require('crypto');
 const usbmux = require('./usbmux');
 
 const ROOT = __dirname;
@@ -20,6 +21,26 @@ const SETTINGS = { mjpegServerFramerate: 15, mjpegScalingFactor: 60, mjpegServer
 
 fs.mkdirSync(path.join(ROOT, 'logs'), { recursive: true });
 const logFile = name => fs.openSync(path.join(ROOT, 'logs', name), 'a');
+
+// ---------- Benutzer, Login-Sitzungen, Protokoll ----------
+const USERS_FILE = path.join(ROOT, 'users.json');
+const users = () => { try { return JSON.parse(fs.readFileSync(USERS_FILE, 'utf8')).users; } catch { return []; } };
+const sessions = new Map();           // token -> { name, admin, devices, ip }
+const loginFails = new Map();         // name|ip -> { n, until }
+const LOCK_MS = 120000;               // Handy gilt als belegt, solange der letzte Befehl jünger als 2 min ist
+function protokoll(user, ip, text) {
+  fs.appendFileSync(path.join(ROOT, 'logs', 'zugriff.log'), `${new Date().toISOString()} ${user || '-'} ${ip} ${text}\n`);
+}
+function checkPassword(u, pw) {
+  return crypto.timingSafeEqual(crypto.scryptSync(pw, Buffer.from(u.salt, 'hex'), 32), Buffer.from(u.hash, 'hex'));
+}
+function cookie(req) { const m = /(?:^|;\s*)pl=([a-f0-9]{48})/.exec(req.headers.cookie || ''); return m && sessions.get(m[1]); }
+const allowed = (u, dev) => u.admin || u.devices.includes(dev.id);
+const LOGIN_HTML = (msg = '') => `<!doctype html><html lang="de"><meta charset="utf-8"><title>phone-lab Login</title>
+<style>body{margin:0;background:#111;color:#ddd;font:15px system-ui;display:flex;align-items:center;justify-content:center;height:100vh}
+form{background:#1c1c1c;padding:24px;border-radius:8px;display:flex;flex-direction:column;gap:10px;width:260px}input,button{padding:8px;background:#222;color:#ddd;border:1px solid #444}button{cursor:pointer}.m{color:#e66;min-height:18px}</style>
+<form method="post" action="/login"><b>phone-lab</b><input name="name" placeholder="Name" autocomplete="username" required autofocus>
+<input name="pw" type="password" placeholder="Passwort" autocomplete="current-password" required><button>Anmelden</button><div class="m">${msg}</div></form>`;
 
 // ---------- WDA-HTTP ----------
 function wda(dev, method, p, body, timeout = 15000) {
@@ -157,19 +178,51 @@ async function health(dev) {
 
 // ---------- HTTP ----------
 function json(res, code, obj) { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(obj)); }
+function rawBody(req) { return new Promise(r => { let b = ''; req.on('data', c => b += c); req.on('end', () => r(b)); }); }
 function body(req) { return new Promise(r => { let b = ''; req.on('data', c => b += c); req.on('end', () => { try { r(JSON.parse(b || '{}')); } catch { r({}); } }); }); }
 
 const server = http.createServer(async (req, res) => {
   const [, route, idStr, action] = req.url.split('?')[0].split('/');
-  const dev = CFG.devices.find(d => String(d.id) === idStr);
-  if (req.method === 'GET' && (route === '' || route === undefined)) {
+  const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+  const secure = req.headers['x-forwarded-proto'] === 'https' ? '; Secure' : '';
+  const html = (code, body) => { res.writeHead(code, { 'Content-Type': 'text/html; charset=utf-8' }); res.end(body); };
+
+  if (route === 'login' && req.method === 'POST') {
+    const b = new URLSearchParams(await rawBody(req));
+    const name = (b.get('name') || '').trim().toLowerCase(), pw = b.get('pw') || '';
+    const key = name + '|' + ip, f = loginFails.get(key);
+    if (f && f.until > Date.now()) return html(429, LOGIN_HTML('Zu viele Versuche, bitte 1 Minute warten'));
+    const u = users().find(x => x.name === name);
+    if (!u || !checkPassword(u, pw)) {
+      const n = (f ? f.n : 0) + 1; loginFails.set(key, { n, until: n >= 5 ? Date.now() + 60000 : 0 });
+      protokoll(name, ip, 'login fehlgeschlagen'); return html(401, LOGIN_HTML('Name oder Passwort falsch'));
+    }
+    loginFails.delete(key);
+    const token = crypto.randomBytes(24).toString('hex');
+    sessions.set(token, { name: u.name, admin: !!u.admin, devices: u.devices || [], ip });
+    protokoll(u.name, ip, 'login');
+    res.writeHead(303, { 'Set-Cookie': `pl=${token}; HttpOnly; SameSite=Strict; Path=/${secure}`, Location: '/' }); return res.end();
+  }
+  const user = cookie(req);
+  if (route === 'logout') {
+    if (user) { protokoll(user.name, ip, 'logout'); for (const [t, u] of sessions) if (u === user) sessions.delete(t); }
+    res.writeHead(303, { 'Set-Cookie': 'pl=; Max-Age=0; Path=/', Location: '/' }); return res.end();
+  }
+  if (!user) {
+    if (req.method === 'GET' && (route === '' || route === undefined || route === 'login')) return html(200, LOGIN_HTML());
+    return json(res, 401, { error: 'nicht angemeldet' });
+  }
+  if (req.method === 'GET' && (route === '' || route === undefined || route === 'login')) {
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     return fs.createReadStream(path.join(ROOT, 'index.html')).pipe(res);
   }
   if (req.method === 'GET' && route === 'devices') {
-    return json(res, 200, CFG.devices.map(d => ({ id: d.id, name: d.name, ready: !!d.ready, battery: d.battery ?? null, w: d.w, h: d.h, running: !!d.proc })));
+    return json(res, 200, { user: user.name, admin: user.admin, devices: CFG.devices.filter(d => allowed(user, d)).map(d => ({
+      id: d.id, name: d.name, ready: !!d.ready, battery: d.battery ?? null, w: d.w, h: d.h, running: !!d.proc,
+      lockedBy: d.lockedBy && Date.now() - d.lockAt < LOCK_MS && d.lockedBy !== user.name ? d.lockedBy : null })) });
   }
-  if (!dev) return json(res, 404, { error: 'unbekanntes Gerät' });
+  const dev = CFG.devices.find(d => String(d.id) === idStr);
+  if (!dev || !allowed(user, dev)) return json(res, 404, { error: 'unbekanntes Gerät' });
   if (req.method === 'GET' && route === 'stream') {
     const up = http.request({ host: '127.0.0.1', port: dev.mjpeg_port, path: '/', method: 'GET' }, upRes => {
       res.writeHead(200, { 'Content-Type': upRes.headers['content-type'] || 'multipart/x-mixed-replace; boundary=--BoundaryString', 'Cache-Control': 'no-cache' });
@@ -180,7 +233,13 @@ const server = http.createServer(async (req, res) => {
     return up.end();
   }
   if (req.method === 'POST' && route === 'cmd' && cmd[action]) {
-    try { await cmd[action](dev, await body(req)); return json(res, 200, { ok: true }); }
+    // Sperre: belegt, solange ein anderer in den letzten 2 min einen Befehl geschickt hat
+    if (dev.lockedBy && dev.lockedBy !== user.name && Date.now() - dev.lockAt < LOCK_MS) return json(res, 409, { ok: false, error: `${dev.name} wird gerade von ${dev.lockedBy} benutzt` });
+    if (dev.lockedBy !== user.name) protokoll(user.name, ip, `übernimmt ${dev.name}`);
+    dev.lockedBy = user.name; dev.lockAt = Date.now();
+    const b = await body(req);
+    protokoll(user.name, ip, `${dev.name} ${action}${action === 'text' ? ' (' + String(b.text || '').length + ' Zeichen)' : ''}`);
+    try { await cmd[action](dev, b); return json(res, 200, { ok: true }); }
     catch (e) { return json(res, 502, { ok: false, error: e.message }); }
   }
   json(res, 404, { error: 'nicht gefunden' });
@@ -188,6 +247,7 @@ const server = http.createServer(async (req, res) => {
 
 (async () => {
   if (!fs.existsSync(WDA_APP)) { console.error(`WDA-App fehlt: ${WDA_APP}. Auf einem Mac mit Xcode ./build-wda.sh ausführen.`); process.exit(1); }
+  if (!users().length) { console.error('Keine Benutzer. Erst anlegen: node user.js add <name> --admin'); process.exit(1); }
   await ensureTunnel();
   for (const dev of CFG.devices) {
     usbmux.forward(dev.udid, 8100, dev.wda_port);

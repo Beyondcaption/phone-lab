@@ -47,6 +47,38 @@ Der Betriebs-Mac braucht kein Internet, außer wenn ein iPhone eine iOS-Version 
 - Neues iPhone: auf dem Entwicklungs-Mac aufnehmen und `./build-wda.sh` (Signaturprofil), neues Paket, auf dem Betriebs-Mac `Start.command`.
 - Signatur abgelaufen (Datum zeigt setup.sh): auf dem Entwicklungs-Mac `./build-wda.sh` und `./make-package.sh`, neues Paket einspielen.
 
+## Zugriff für VAs (Phase 4)
+
+Der Server lauscht weiterhin nur auf 127.0.0.1. Nach außen kommt die Seite über Tailscale Serve oder Cloudflare Tunnel,
+beide leiten auf 127.0.0.1:3000 weiter. Der Mac selbst ist aus dem Internet nie erreichbar.
+
+- Benutzer anlegen: `node user.js add <name> --handys 1,2,3` (Passwort wird abgefragt, mindestens 10 Zeichen, nur als Hash gespeichert).
+  Admin, der alle Handys sieht: `node user.js add <name> --admin`. Weitere Befehle: `list`, `handys <name> 1,2`, `remove <name>`.
+- users.json liegt nicht im git und nicht im Paket. Ohne Benutzer startet der Server nicht.
+- Jede VA sieht nur ihre Handys. Ein Handy ist belegt, solange jemand in den letzten 2 Minuten einen Befehl geschickt hat;
+  andere sehen "In Benutzung von ...", Befehle werden abgelehnt.
+- Protokoll in logs/zugriff.log: Zeit, Benutzer, IP, Ereignis (Login, Logout, Übernahme eines Handys, jeder Befehl).
+- Nach 5 falschen Passwörtern ist der Name von dieser IP 1 Minute gesperrt.
+- Endpunkte: nur Login, Logout, Geräteliste, Stream, tap, doubletap, swipe, text, home, instagram. Nichts für Dateien, Befehle, Einstellungen.
+
+### Checkliste iPhones absichern (in dieser Reihenfolge)
+
+1. Zuerst WDA installieren und der Entwickler-App vertrauen (passiert beim ersten Start des Servers). Danach erst sperren,
+   denn das Verbot "Apps installieren" blockiert auch die WDA-Installation.
+2. Kein Mail-Konto auf dem Handy (Einstellungen > Mail > Accounts). Instagram-2FA nicht auf demselben Handy.
+3. Bildschirmzeit mit eigenem Code: Einstellungen > Bildschirmzeit > Bildschirmzeit-Code festlegen (nicht der Geräte-Code).
+4. Beschränkungen > Käufe im iTunes & App Store: Installieren "Nicht erlauben", Apps löschen "Nicht erlauben".
+5. Beschränkungen > Änderungen zulassen: Code-Änderungen "Nicht erlauben", Account-Änderungen "Nicht erlauben".
+6. Beschränkungen > Erlaubte Apps: nur das Nötige (Instagram, Einstellungen bleibt). WDA zählt nicht als App in dieser Liste und läuft weiter.
+7. WLAN und Bluetooth aus lassen; Beschränkungen > Änderungen zulassen > Mobilfunkdaten-Änderungen "Nicht erlauben".
+
+Was WDA braucht und von den Sperren nicht berührt wird: Entwicklermodus (bleibt an), das Vertrauen der Entwickler-App, USB.
+Einmal im Jahr (neue Signatur) muss "Installieren" kurz wieder erlaubt werden, dann neues Paket einspielen, dann wieder sperren.
+
+### Mac
+
+FileVault an, Firewall an (geprüft am 28.10.2026). Automatische Anmeldung nur, wenn der Mac physisch sicher steht.
+
 ## Bedienung der Kachel
 
 - Klick = tippen. Shift+Klick = Doppeltipp (Like). Linke Taste gedrückt ziehen = wischen entlang der Mausspur, mit Leuchtspur.

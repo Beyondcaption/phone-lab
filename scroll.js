@@ -29,17 +29,17 @@ const lognormal = (median, sigma) => median * Math.exp(sigma * (Math.sqrt(-2 * M
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-// Wischweg wie mit dem Daumen: Start unten mittig, leicht schräg, Beschleunigung am Anfang, Auslaufen am Ende
+// Wischweg wie mit dem Daumen: Start unten mittig, leicht schräg. Immer entschieden: mindestens halber Bildschirm,
+// Schwung bis zum Loslassen, damit Reels sicher zum nächsten Video springt und nie halb stehen bleibt.
 function swipePath(dir = -1) {
-  const x0 = rnd(0.35, 0.65), y0 = dir < 0 ? rnd(0.6, 0.8) : rnd(0.25, 0.4);
-  const len = rnd(0.35, 0.55), drift = rnd(-0.06, 0.06), bend = rnd(-0.04, 0.04);
-  const slow = Math.random() < 0.1;                   // ab und zu ein langsamer Zug statt Flick
-  const total = slow ? rnd(500, 900) : rnd(170, 420);
-  const n = 6 + Math.floor(rnd(0, 5));
+  const x0 = rnd(0.35, 0.65), y0 = dir < 0 ? rnd(0.7, 0.85) : rnd(0.15, 0.3);
+  const len = rnd(0.55, 0.7), drift = rnd(-0.05, 0.05), bend = rnd(-0.03, 0.03);
+  const total = rnd(160, 300);
+  const n = 5 + Math.floor(rnd(0, 4));
   const pts = [];
   for (let i = 0; i <= n; i++) {
-    const u = i / n, e = 1 - Math.pow(1 - u, 2.2);     // ease-out
-    pts.push({ x: clamp(x0 + drift * e + bend * Math.sin(Math.PI * e), 0.05, 0.95), y: clamp(y0 + dir * len * e, 0.05, 0.95), t: Math.round(total * u + rnd(-8, 8)) });
+    const u = i / n, e = 1 - Math.pow(1 - u, 1.5);     // zügig, am Ende noch in Bewegung
+    pts.push({ x: clamp(x0 + drift * e + bend * Math.sin(Math.PI * e), 0.05, 0.95), y: clamp(y0 + dir * len * e, 0.05, 0.95), t: Math.round(total * u + rnd(-6, 6)) });
   }
   pts[0].t = 0;
   for (let i = 1; i < pts.length; i++) pts[i].t = Math.max(pts[i].t, pts[i - 1].t + 10);
@@ -163,13 +163,24 @@ async function run() {
   if (reason.startsWith('Warnung') || reason.startsWith('Stoppwort')) process.exitCode = 2;
 }
 
-if (DRY) { // Selbsttest ohne Gerät: Verteilungen prüfen
+if (args.includes('--swipetest')) { // 5 Wische, je ein Screenshot danach, zum Prüfen ob das Bild ganz ist
+  (async () => {
+    await session(); await openReels();
+    const out = args[args.indexOf('--swipetest') + 1];
+    for (let i = 1; i <= 5; i++) {
+      await swipe(swipePath(-1)); await sleep(1200);
+      fs.writeFileSync(`${out}/swipe${i}.png`, Buffer.from((await wda('GET', '/screenshot')).value, 'base64'));
+      await sleep(rnd(1500, 3000));
+    }
+    await wda('POST', '/wda/homescreen'); console.log('5 Screenshots in', out);
+  })();
+} else if (DRY) { // Selbsttest ohne Gerät: Verteilungen prüfen
   const d = Array.from({ length: 2000 }, () => dwell(false) / 1000).sort((a, b) => a - b);
   const p = swipePath(-1), back = swipePath(+1);
   const assert = (ok, msg) => { if (!ok) { console.error('FEHLER:', msg); process.exit(1); } };
   assert(p.every(q => q.x >= 0.05 && q.x <= 0.95 && q.y >= 0.05 && q.y <= 0.95), 'Wischweg außerhalb');
-  assert(p[0].y - p[p.length - 1].y > 0.3, 'Wisch nach oben zu kurz');
-  assert(back[back.length - 1].y - back[0].y > 0.3, 'Wisch nach unten zu kurz');
+  assert(p[0].y - p[p.length - 1].y > 0.5, 'Wisch nach oben zu kurz');
+  assert(back[back.length - 1].y - back[0].y > 0.5, 'Wisch nach unten zu kurz');
   assert(p.every((q, i) => i === 0 || q.t >= p[i - 1].t), 'Zeiten nicht aufsteigend');
   assert(d[1000] > 4 && d[1000] < 9, 'Median Verweildauer unplausibel: ' + d[1000]);
   console.log('Verweildauer s: min', d[0].toFixed(1), 'median', d[1000].toFixed(1), 'p90', d[1800].toFixed(1), 'max', d[1999].toFixed(1));

@@ -10,3 +10,4 @@ devimages/
 wda/
 bin/
 selfIdentity.plist
+users.json
