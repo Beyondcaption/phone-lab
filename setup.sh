@@ -1,39 +1,20 @@
 #!/bin/zsh
-# Richtet einen frischen Mac für phone-lab ein. Fragt vor jeder Installation. Mehrfach ausführbar.
-set -e
+# Einrichtung auf dem Betriebs-Mac. Braucht kein Xcode, kein Homebrew: Node und go-ios liegen in bin/, WDA in wda/.
+# Prüft alles, nimmt angesteckte iPhones auf, richtet den Autostart ein. Beliebig oft ausführbar.
 cd "$(dirname "$0")"
-ok() { echo "  ok   $1"; }; fehlt() { echo "  FEHLT $1"; }
+ok() { echo "  ok    $1"; }; fehlt() { echo "  FEHLT $1"; }
 ask() { read -q "r?$1 [y/N] "; echo; [[ $r == y ]]; }
 
-echo "== Xcode =="
-xcode-select -p >/dev/null 2>&1 && ok "Xcode: $(xcodebuild -version | head -1)" || { fehlt "Xcode aus dem App Store installieren, einmal öffnen, Lizenz bestätigen"; exit 1; }
-xcodebuild -checkFirstLaunchStatus >/dev/null 2>&1 || { fehlt "Xcode einmal öffnen und Lizenz bestätigen (oder: sudo xcodebuild -runFirstLaunch)"; exit 1; }
-
-echo "== Homebrew =="
-command -v brew >/dev/null && ok "brew $(brew --version | head -1 | cut -d' ' -f2)" || { fehlt "Homebrew: https://brew.sh"; exit 1; }
-
-echo "== libimobiledevice =="
-command -v idevice_id >/dev/null && ok "libimobiledevice" || { ask "brew install libimobiledevice?" && brew install libimobiledevice; }
-
-echo "== Node =="
-command -v node >/dev/null && ok "node $(node -v)" || { ask "brew install node?" && brew install node; }
-
-echo "== Appium + XCUITest-Treiber =="
-command -v appium >/dev/null && ok "appium $(appium -v)" || { ask "npm install -g appium?" && npm install -g appium; }
-appium driver list --installed 2>&1 | grep -q xcuitest && ok "xcuitest-Treiber" || { ask "appium driver install xcuitest?" && appium driver install xcuitest; }
-
-echo "== Apple-ID in Xcode =="
-TEAM=$(defaults read com.apple.dt.Xcode IDEProvisioningTeamByIdentifier 2>/dev/null | grep -m1 teamID | sed 's/.*= *//; s/[";]//g')
-if [[ -n "$TEAM" ]]; then
-  ok "Team $TEAM in Xcode"
-  CUR=$(python3 -c "import json;print(json.load(open('devices.json'))['team_id'])")
-  [[ "$TEAM" == "$CUR" ]] || echo "  HINWEIS team_id in devices.json ist $CUR, Xcode hat $TEAM. Anpassen, falls dieser Mac mit anderer Apple-ID signiert."
-else
-  fehlt "Xcode > Settings > Accounts > Plus > Apple-ID anmelden"
-fi
+echo "== Programme =="
+NODE=./bin/node; [[ -x $NODE ]] || NODE=$(command -v node)
+[[ -n "$NODE" ]] && ok "node $($NODE -v)" || { fehlt "bin/node (Paket unvollständig)"; exit 1; }
+IOS=./bin/ios; [[ -x $IOS ]] || IOS=$(command -v ios)
+[[ -n "$IOS" ]] && ok "go-ios $($IOS version 2>/dev/null | grep -o '"version":"[^"]*"' | cut -d'"' -f4)" || { fehlt "bin/ios (Paket unvollständig)"; exit 1; }
+[[ -d wda/WebDriverAgentRunner-Runner.app ]] && ok "WDA-App (signiert bis $(security cms -D -i wda/WebDriverAgentRunner-Runner.app/embedded.mobileprovision 2>/dev/null | grep -A1 ExpirationDate | tail -1 | sed 's/.*<date>//; s/T.*//'))" || { fehlt "wda/ (auf dem Mac mit Xcode ./build-wda.sh ausführen)"; exit 1; }
+xattr -dr com.apple.quarantine bin wda 2>/dev/null || true
 
 echo "== iPhones per USB =="
-./add-device.sh
+$NODE add-device.js
 
 echo "== Autostart (launchd) + Schlafsperre =="
 if launchctl print "gui/$(id -u)/com.phonelab.server" >/dev/null 2>&1; then
@@ -42,5 +23,6 @@ else
   ask "Autostart nach Login einrichten und Server starten?" && ./install-launchd.sh
 fi
 echo
-echo "Fertig. Kachel-Seite: http://127.0.0.1:3000   Logs: logs/server.log und logs/handy-N.log"
-echo "Neue iPhones später: anstecken, vertrauen, Entwicklermodus an, dann ./setup.sh nochmal."
+echo "Kachel-Seite: http://127.0.0.1:3000   Logs: logs/server.log und logs/handy-N.log"
+echo "Auf jedem neuen iPhone einmal: Einstellungen > Allgemein > VPN und Geräteverwaltung > Entwickler-App vertrauen."
+echo "Neue iPhones später: anstecken, vertrauen, dann ./setup.sh nochmal. Neue Geräte brauchen einmal ./build-wda.sh auf dem Mac mit Xcode."

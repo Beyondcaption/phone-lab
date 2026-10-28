@@ -3,7 +3,7 @@
 # Pfade werden aus dem aktuellen Repo-Ordner und dem aktuellen Benutzer erzeugt, nichts ist fest verdrahtet.
 set -e
 DIR=$(cd "$(dirname "$0")" && pwd)
-NODE=$(command -v node)
+NODE="$DIR/bin/node"; [[ -x "$NODE" ]] || NODE=$(command -v node)
 PLIST=~/Library/LaunchAgents/com.phonelab.server.plist
 mkdir -p ~/Library/LaunchAgents "$DIR/logs"
 cat > "$PLIST" <<P

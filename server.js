@@ -1,20 +1,25 @@
 #!/usr/bin/env node
-// phone-lab Server: startet WDA je iPhone, reicht den MJPEG-Stream durch,
+// phone-lab Server: startet WDA je iPhone über go-ios (kein Xcode nötig), reicht den MJPEG-Stream durch,
 // übersetzt Eingaben der Kachel-Seite in WDA-Aufrufe. Nur 127.0.0.1.
 'use strict';
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
+const usbmux = require('./usbmux');
 
 const ROOT = __dirname;
 const CFG = JSON.parse(fs.readFileSync(path.join(ROOT, 'devices.json'), 'utf8'));
 const PORT = 3000;
 const INSTAGRAM = 'com.burbn.instagram';
+const IOS = fs.existsSync(path.join(ROOT, 'bin', 'ios')) ? path.join(ROOT, 'bin', 'ios') : 'ios';
+const WDA_APP = path.join(ROOT, 'wda', 'WebDriverAgentRunner-Runner.app');
+const BUNDLE = CFG.wda_bundle_id + '.xctrunner';
 // waitForIdleTimeout 0 und animationCoolOffTimeout 0: WDA wartet nicht auf Ruhe der App, Eingaben kommen sofort an
 const SETTINGS = { mjpegServerFramerate: 12, mjpegScalingFactor: 60, mjpegServerScreenshotQuality: 50, waitForIdleTimeout: 0, animationCoolOffTimeout: 0 };
 
 fs.mkdirSync(path.join(ROOT, 'logs'), { recursive: true });
+const logFile = name => fs.openSync(path.join(ROOT, 'logs', name), 'a');
 
 // ---------- WDA-HTTP ----------
 function wda(dev, method, p, body, timeout = 15000) {
@@ -79,13 +84,51 @@ const cmd = {
   instagram: dev => withSession(dev, sid => wda(dev, 'POST', `/session/${sid}/wda/apps/launch`, { bundleId: INSTAGRAM })),
 };
 
+// ---------- go-ios ----------
+function ios(args, log) {
+  return new Promise((resolve, reject) => {
+    const p = spawn(IOS, args, { cwd: ROOT, stdio: ['ignore', log, log] });
+    p.on('exit', code => code === 0 ? resolve() : reject(new Error(`ios ${args[0]} beendet mit ${code}`)));
+    p.on('error', reject);
+  });
+}
+function iosOut(args) {
+  return new Promise(resolve => {
+    let out = ''; const p = spawn(IOS, args, { cwd: ROOT });
+    p.stdout.on('data', d => out += d); p.stderr.on('data', d => out += d);
+    p.on('exit', () => resolve(out)); p.on('error', () => resolve(''));
+  });
+}
+
+// Ein Tunnel-Dienst für alle Geräte (iOS 17+), ohne Admin-Rechte. Koppelt neue Geräte selbst (Dialog auf dem iPhone).
+async function ensureTunnel() {
+  if (!(await iosOut(['tunnel', 'ls'])).includes('agent is not running')) return;
+  const child = spawn(IOS, ['tunnel', 'start', '--userspace'], { cwd: ROOT, stdio: ['ignore', logFile('tunnel.log'), logFile('tunnel.log')] });
+  console.log(`Tunnel gestartet (pid ${child.pid})`);
+  child.on('exit', code => { console.log(`Tunnel beendet (code ${code}), Neustart in 5 s`); setTimeout(ensureTunnel, 5000); });
+}
+
 // ---------- WDA-Prozess je Gerät mit Neustart ----------
-function startWda(dev) {
+async function startWda(dev) {
   if (dev.stopping) return;
-  const log = fs.openSync(path.join(ROOT, 'logs', `handy-${dev.id}.log`), 'a');
-  const child = spawn(path.join(ROOT, 'wda-start.sh'), [dev.udid, String(dev.wda_port), String(dev.mjpeg_port)],
-    { detached: true, stdio: ['ignore', log, log] });
-  dev.proc = child; dev.sid = null; dev.fails = 0; dev.started = Date.now();
+  dev.sid = null; dev.fails = 0; dev.started = Date.now();
+  const log = logFile(`handy-${dev.id}.log`);
+  try {
+    if (!(await usbmux.listDevices()).some(d => d.udid === dev.udid)) throw new Error('nicht per USB verbunden');
+    await ios(['image', 'auto', '--udid=' + dev.udid], log);
+    const marker = path.join(ROOT, 'logs', `installed-${dev.udid}`);
+    if (!fs.existsSync(marker) || fs.statSync(marker).mtimeMs < fs.statSync(WDA_APP).mtimeMs) {
+      await ios(['install', '--path=' + WDA_APP, '--udid=' + dev.udid], log);
+      fs.writeFileSync(marker, new Date().toISOString());
+      console.log(`[${dev.name}] WDA installiert. Auf dem iPhone jetzt die Entwickler-App vertrauen (Einstellungen > Allgemein > VPN und Geräteverwaltung).`);
+    }
+  } catch (e) {
+    console.log(`[${dev.name}] Vorbereitung fehlgeschlagen: ${e.message}, neuer Versuch in 15 s`);
+    return setTimeout(() => startWda(dev), 15000);
+  }
+  const child = spawn(IOS, ['runwda', '--bundleid=' + BUNDLE, '--testrunnerbundleid=' + BUNDLE, '--xctestconfig=WebDriverAgentRunner.xctest',
+    '--env=USE_PORT=8100', '--env=MJPEG_SERVER_PORT=9100', '--udid=' + dev.udid], { cwd: ROOT, stdio: ['ignore', log, log] });
+  dev.proc = child;
   console.log(`[${dev.name}] WDA gestartet (pid ${child.pid})`);
   child.on('exit', code => {
     console.log(`[${dev.name}] WDA beendet (code ${code}), Neustart in 5 s`);
@@ -94,7 +137,7 @@ function startWda(dev) {
   });
 }
 function killWda(dev) {
-  if (dev.proc) { try { process.kill(-dev.proc.pid, 'SIGTERM'); } catch {} }
+  if (dev.proc) { try { dev.proc.kill('SIGTERM'); } catch {} }
 }
 
 async function health(dev) {
@@ -105,8 +148,8 @@ async function health(dev) {
     dev.battery = b && b.value.level >= 0 ? Math.round(b.value.level * 100) : null;
   } catch {
     dev.ready = false; dev.sid = null;
-    // erst nach 5 min Startzeit zählen: ein Neubau von WDA (neues Gerät, abgelaufene Signatur) dauert bis zu einigen Minuten
-    if (Date.now() - dev.started > 300000 && ++dev.fails >= 3) { console.log(`[${dev.name}] WDA antwortet nicht, Neustart`); dev.fails = 0; killWda(dev); }
+    // erst nach 5 min Startzeit zählen: Entwicklerbild, Installation und erster Start dauern beim neuen Gerät einige Minuten
+    if (dev.proc && Date.now() - dev.started > 300000 && ++dev.fails >= 3) { console.log(`[${dev.name}] WDA antwortet nicht, Neustart`); dev.fails = 0; killWda(dev); }
   }
 }
 
@@ -141,9 +184,17 @@ const server = http.createServer(async (req, res) => {
   json(res, 404, { error: 'nicht gefunden' });
 });
 
-for (const dev of CFG.devices) { dev.started = Date.now(); startWda(dev); }
-setInterval(() => CFG.devices.forEach(health), 10000);
-server.listen(PORT, '127.0.0.1', () => console.log(`phone-lab läuft auf http://127.0.0.1:${PORT}`));
+(async () => {
+  if (!fs.existsSync(WDA_APP)) { console.error(`WDA-App fehlt: ${WDA_APP}. Auf einem Mac mit Xcode ./build-wda.sh ausführen.`); process.exit(1); }
+  await ensureTunnel();
+  for (const dev of CFG.devices) {
+    usbmux.forward(dev.udid, 8100, dev.wda_port);
+    usbmux.forward(dev.udid, 9100, dev.mjpeg_port);
+    dev.started = Date.now(); startWda(dev);
+  }
+  setInterval(() => CFG.devices.forEach(health), 10000);
+  server.listen(PORT, '127.0.0.1', () => console.log(`phone-lab läuft auf http://127.0.0.1:${PORT}`));
+})();
 
 function shutdown() { for (const d of CFG.devices) { d.stopping = true; killWda(d); } process.exit(0); }
 process.on('SIGINT', shutdown); process.on('SIGTERM', shutdown);
