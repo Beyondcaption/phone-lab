@@ -40,6 +40,13 @@ Ohne Zutun nach Neustart des Macs: Systemeinstellungen > Benutzer > automatische
 Passworteingabe nach dem Neustart). Mac am Netzteil. Der Bildschirm darf ausgehen, der Mac selbst schläft nicht (caffeinate -is).
 Der Betriebs-Mac braucht kein Internet, außer wenn ein iPhone eine iOS-Version hat, für die kein Entwicklerbild in devimages/ liegt.
 
+## Aktualisieren
+
+1. Entwicklungs-Mac: ändern, testen, committen, dann `./make-package.sh`.
+2. Betriebs-Mac, Archiv im selben Ordner wie der bestehende Ordner phone-lab:
+   `tar -xzf phone-lab-paket.tar.gz && xattr -dr com.apple.quarantine phone-lab && launchctl kickstart -k gui/$(id -u)/com.phonelab.server`
+   Benutzer, Logs und Pairings bleiben erhalten, sie sind nicht im Paket. Nur index.html geändert: Datei kopieren reicht, kein Neustart.
+
 ## Betrieb
 
 - Logs: logs/server.log (Server), logs/handy-N.log (WDA je Gerät), logs/tunnel.log.
