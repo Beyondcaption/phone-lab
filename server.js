@@ -63,10 +63,15 @@ const cmd = {
     { type: 'pointerMove', duration: 0, ...px(dev, x, y) }, { type: 'pointerDown', button: 0 },
     { type: 'pause', duration: 50 }, { type: 'pointerUp', button: 0 }, { type: 'pause', duration: 90 },
     { type: 'pointerDown', button: 0 }, { type: 'pause', duration: 50 }, { type: 'pointerUp', button: 0 }]))),
-  swipe: (dev, { x1, y1, x2, y2, ms = 300 }) => withSession(dev, sid => wda(dev, 'POST', `/session/${sid}/actions`, touch([
-    { type: 'pointerMove', duration: 0, ...px(dev, x1, y1) }, { type: 'pointerDown', button: 0 },
-    { type: 'pause', duration: 60 }, { type: 'pointerMove', duration: ms, ...px(dev, x2, y2) },
-    { type: 'pointerUp', button: 0 }]))),
+  // Wischt entlang der Mausspur: path = [{x,y,t}], t in ms ab Start, x/y als Anteil 0..1
+  swipe: (dev, { path }) => {
+    if (!Array.isArray(path) || path.length < 2) throw new Error('swipe braucht path');
+    const pts = path.slice(-60).map(p => ({ ...px(dev, +p.x || 0, +p.y || 0), t: Math.max(0, +p.t || 0) }));
+    const steps = [{ type: 'pointerMove', duration: 0, x: pts[0].x, y: pts[0].y }, { type: 'pointerDown', button: 0 }];
+    for (let i = 1; i < pts.length; i++) steps.push({ type: 'pointerMove', duration: Math.min(1000, Math.max(10, pts[i].t - pts[i - 1].t)), x: pts[i].x, y: pts[i].y });
+    steps.push({ type: 'pointerUp', button: 0 });
+    return withSession(dev, sid => wda(dev, 'POST', `/session/${sid}/actions`, touch(steps)));
+  },
   text: (dev, { text }) => withSession(dev, sid => wda(dev, 'POST', `/session/${sid}/wda/keys`, { value: [String(text)] })),
   home: dev => wda(dev, 'POST', '/wda/homescreen'),
   instagram: dev => withSession(dev, sid => wda(dev, 'POST', `/session/${sid}/wda/apps/launch`, { bundleId: INSTAGRAM })),

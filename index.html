@@ -39,27 +39,30 @@ function tile(d) {
   const scr = el.querySelector('.screen'), img = el.querySelector('img'), inp = el.querySelector('input');
   const norm = e => { const r = scr.getBoundingClientRect(); return { x: Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)), y: Math.min(1, Math.max(0, (e.clientY - r.top) / r.height)) }; };
 
-  // Klick = tippen, Doppelklick = Doppeltipp, Ziehen = wischen, Mausrad = wischen
-  let down = null, tapTimer = null, lastTap = 0;
-  scr.addEventListener('pointerdown', e => { down = { ...norm(e), t: Date.now() }; scr.setPointerCapture(e.pointerId); });
-  scr.addEventListener('pointerup', e => {
+  // Linke Maustaste: Klick = tippen, Doppelklick = Doppeltipp, gedrückt ziehen = wischen entlang der Mausspur
+  let down = null, pathPts = [], tapTimer = null, lastTap = 0;
+  scr.addEventListener('contextmenu', e => e.preventDefault());
+  scr.addEventListener('pointerdown', e => {
+    if (e.button !== 0) return;
+    down = { ...norm(e), t: Date.now() }; pathPts = [{ ...down, t: 0 }]; scr.setPointerCapture(e.pointerId);
+  });
+  scr.addEventListener('pointermove', e => {
     if (!down) return;
-    const up = norm(e), dx = (up.x - down.x) * scr.clientWidth, dy = (up.y - down.y) * scr.clientHeight;
-    const start = down; down = null;
-    if (Math.hypot(dx, dy) > 12) { post(d.id, 'swipe', { x1: start.x, y1: start.y, x2: up.x, y2: up.y, ms: Math.min(800, Math.max(150, Date.now() - start.t)) }); return; }
+    const p = { ...norm(e), t: Date.now() - down.t };
+    if (p.t - pathPts[pathPts.length - 1].t >= 25) pathPts.push(p);
+  });
+  const finish = e => {
+    if (!down) return;
+    const up = { ...norm(e), t: Date.now() - down.t }, start = down; down = null;
+    pathPts.push(up);
+    const far = pathPts.some(p => Math.hypot((p.x - start.x) * scr.clientWidth, (p.y - start.y) * scr.clientHeight) > 12);
+    if (far) { post(d.id, 'swipe', { path: pathPts }); return; }
     if (Date.now() - lastTap < 300) { clearTimeout(tapTimer); lastTap = 0; post(d.id, 'doubletap', up); return; }
     lastTap = Date.now();
     tapTimer = setTimeout(() => post(d.id, 'tap', up), 300);
-  });
-  let wheelAcc = 0, wheelTimer = null;
-  scr.addEventListener('wheel', e => {
-    e.preventDefault(); wheelAcc += e.deltaY;
-    if (wheelTimer) return;
-    wheelTimer = setTimeout(() => {
-      const dir = wheelAcc > 0 ? 1 : -1; wheelAcc = 0; wheelTimer = null;
-      post(d.id, 'swipe', { x1: 0.5, y1: 0.5 + 0.2 * dir, x2: 0.5, y2: 0.5 - 0.2 * dir, ms: 300 });
-    }, 250);
-  }, { passive: false });
+  };
+  scr.addEventListener('pointerup', e => e.button === 0 && finish(e));
+  scr.addEventListener('pointercancel', () => down = null);
 
   const send = () => { if (inp.value) { post(d.id, 'text', { text: inp.value }); inp.value = ''; } };
   el.querySelector('.send').onclick = send;
