@@ -11,24 +11,34 @@ Steuert iPhones per USB vom Mac aus über eine lokale Kachel-Seite. Projektbrief
 - smoke.sh: Rauchtest gegen den laufenden Server.
 - setup.sh: Prüft und installiert alles auf einem frischen Mac, fragt vor jeder Installation.
 
-## Umzug auf einen anderen Mac
+## Einrichtung auf einem Mac (auch Umzug)
 
-1. Repo kopieren (git clone von diesem Mac, USB-Stick oder AirDrop; logs/ und .env nicht mitnehmen).
-2. Auf dem neuen Mac `./setup.sh` ausführen und die Punkte abarbeiten, die FEHLT zeigen.
-3. In Xcode die Apple-ID anmelden. Gleiche Apple-ID wie bisher: team_id in devices.json bleibt. Andere Apple-ID: team_id in devices.json auf die neue Team-ID setzen (setup.sh zeigt sie).
-4. Jedes iPhone einmal an den neuen Mac stecken und "Diesem Computer vertrauen" bestätigen. Entwicklermodus bleibt an.
-5. `node server.js` starten. Beim ersten Start je iPhone baut Xcode WDA neu und lädt es aufs Gerät. Danach auf dem iPhone unter Einstellungen > Allgemein > VPN und Geräteverwaltung die Entwickler-App vertrauen (nötig, weil der neue Mac ein eigenes Signierzertifikat bekommt).
+1. Repo auf den Mac kopieren (git clone von einem anderen Mac, USB-Stick oder AirDrop). logs/ nicht mitnehmen.
+2. Xcode aus dem App Store installieren, einmal öffnen, Lizenz bestätigen. Xcode > Settings > Accounts > Plus > Apple-ID anmelden.
+   Gleiche Apple-ID wie bisher: fertig. Andere Apple-ID: team_id in devices.json anpassen, setup.sh zeigt die neue Team-ID.
+3. iPhones per USB anstecken. Auf jedem: "Diesem Computer vertrauen", dann Entwicklermodus einschalten
+   (Einstellungen > Datenschutz und Sicherheit > Entwicklermodus, Neustart). Der Schalter erscheint erst, wenn das iPhone
+   einmal mit dem Mac verbunden war und Xcode lief.
+4. `./setup.sh` ausführen. Es prüft Werkzeuge, installiert fehlende nach Rückfrage, nimmt neue iPhones in devices.json auf
+   (add-device.sh) und richtet den Autostart ein (install-launchd.sh). Beliebig oft ausführbar.
+5. Beim ersten Start baut der Server WDA je iPhone und lädt es aufs Gerät (ein paar Minuten je Gerät, siehe logs/handy-N.log).
+   Danach auf jedem iPhone: Einstellungen > Allgemein > VPN und Geräteverwaltung > Entwickler-App vertrauen.
 6. http://127.0.0.1:3000 öffnen.
 
-Beim ersten Start auf einem neuen Mac muss WDA einmal gebaut werden. wda-start.sh nutzt test-without-building, deshalb vorher einmal bauen:
+Damit der Server nach einem Neustart des Macs ohne Zutun läuft: Systemeinstellungen > Benutzer > automatische Anmeldung
+für den Benutzer einschalten (bei FileVault muss nach dem Neustart trotzdem einmal das Passwort eingegeben werden).
+Der Mac sollte am Netzteil hängen. Der Bildschirm darf ausgehen, der Mac selbst schläft nicht (caffeinate -is).
 
-```
-cd ~/.appium/node_modules/appium-xcuitest-driver/node_modules/appium-webdriveragent
-xcodebuild -project WebDriverAgent.xcodeproj -scheme WebDriverAgentRunner \
-  -destination 'id=<UDID>' -allowProvisioningUpdates \
-  DEVELOPMENT_TEAM=<team_id> CODE_SIGN_IDENTITY="Apple Development" \
-  PRODUCT_BUNDLE_IDENTIFIER=<wda_bundle_id> build-for-testing
-```
+Ein weiteres iPhone später hinzufügen: anstecken, vertrauen, Entwicklermodus an, `./setup.sh` nochmal.
+
+## Betrieb
+
+- Logs: logs/server.log (Server), logs/handy-N.log (WDA je Gerät).
+- Neustart: `launchctl kickstart -k gui/$(id -u)/com.phonelab.server`
+- Stoppen: `launchctl bootout gui/$(id -u)/com.phonelab.server`
+- Ohne Autostart von Hand: `node server.js`
+- WDA wird automatisch neu gebaut, wenn ein Gerät neu ist oder der Build älter als 6 Tage ist (kostenlose Apple-ID: Signatur gilt 7 Tage).
+- Stürzt WDA auf einem Gerät ab, startet der Server es nach 5 s neu. Antwortet es 30 s nicht, wird es abgeschossen und neu gestartet.
 
 ## Bedienung der Kachel
 
@@ -38,5 +48,8 @@ xcodebuild -project WebDriverAgent.xcodeproj -scheme WebDriverAgentRunner \
 
 ## Grenzen
 
-- Kostenloses Apple-Konto: Signatur läuft nach 7 Tagen ab, WDA muss dann neu gebaut werden.
+- Kostenloses Apple-Konto: Signatur läuft nach 7 Tagen ab, WDA wird dann automatisch neu gebaut. Ein bezahltes
+  Developer-Konto (Signatur 1 Jahr) ist bei 10 Geräten die ruhigere Wahl.
 - Etwa 0,5 s Latenz je Tipp, das ist die Grundlatenz von XCTest.
+- Last je Gerät am Mac: etwa 170 MB RAM und 3 % CPU (xcodebuild hält die Testsitzung, dazu iproxy). Bei 10 Geräten
+  grob 2 GB RAM und ein Drittel eines Kerns, plus den Browser mit 10 Streams.

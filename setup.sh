@@ -33,7 +33,14 @@ else
 fi
 
 echo "== iPhones per USB =="
-idevice_id -l 2>/dev/null | while read u; do echo "  $u  iOS $(ideviceinfo -u $u -k ProductVersion 2>/dev/null)  DevMode: $(idevicedevmodectl list 2>/dev/null | grep $u | awk '{print $2}')"; done
-[[ -n "$(idevice_id -l 2>/dev/null)" ]] || echo "  kein iPhone gefunden"
+./add-device.sh
+
+echo "== Autostart (launchd) + Schlafsperre =="
+if launchctl print "gui/$(id -u)/com.phonelab.server" >/dev/null 2>&1; then
+  ok "Autostart eingerichtet"; ask "Server jetzt neu starten (nimmt neue Geräte auf)?" && launchctl kickstart -k "gui/$(id -u)/com.phonelab.server"
+else
+  ask "Autostart nach Login einrichten und Server starten?" && ./install-launchd.sh
+fi
 echo
-echo "Fertig. Dann: node server.js  und  http://127.0.0.1:3000"
+echo "Fertig. Kachel-Seite: http://127.0.0.1:3000   Logs: logs/server.log und logs/handy-N.log"
+echo "Neue iPhones später: anstecken, vertrauen, Entwicklermodus an, dann ./setup.sh nochmal."

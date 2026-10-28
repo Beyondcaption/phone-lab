@@ -105,8 +105,8 @@ async function health(dev) {
     dev.battery = b && b.value.level >= 0 ? Math.round(b.value.level * 100) : null;
   } catch {
     dev.ready = false; dev.sid = null;
-    // ponytail: erst nach 60 s Startzeit zählen, xcodebuild braucht ~10-40 s bis WDA antwortet
-    if (Date.now() - dev.started > 60000 && ++dev.fails >= 3) { console.log(`[${dev.name}] WDA antwortet nicht, Neustart`); dev.fails = 0; killWda(dev); }
+    // erst nach 5 min Startzeit zählen: ein Neubau von WDA (neues Gerät, abgelaufene Signatur) dauert bis zu einigen Minuten
+    if (Date.now() - dev.started > 300000 && ++dev.fails >= 3) { console.log(`[${dev.name}] WDA antwortet nicht, Neustart`); dev.fails = 0; killWda(dev); }
   }
 }
 
