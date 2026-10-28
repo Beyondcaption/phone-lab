@@ -3,6 +3,7 @@
 //   node user.js add <name> [--admin] [--handys 1,2,3]    Passwort wird abgefragt, nicht angezeigt. Ohne --handys: sieht alle Handys
 //   node user.js handys <name> 1,2,3|alle                  Zuteilung ändern
 //   node user.js list
+//   node user.js passwort <name>                           Passwort neu setzen
 //   node user.js remove <name>
 'use strict';
 const fs = require('fs'), path = require('path'), crypto = require('crypto');
@@ -35,9 +36,16 @@ const parseIds = v => !v || v === 'alle' ? 'all' : v.split(',').map(Number).filt
   } else if (cmd === 'handys' && name) {
     const u = db.users.find(x => x.name === name.toLowerCase()); if (!u) return console.error('unbekannt');
     u.devices = parseIds(rest[0]); save(db); console.log(`${u.name}: Handys ${u.devices === 'all' ? 'alle' : u.devices.join(', ') || 'keine'}`);
+  } else if (cmd === 'passwort' && name) {
+    const u = db.users.find(x => x.name === name.toLowerCase()); if (!u) return console.error('unbekannt');
+    const pw = await askHidden(`Neues Passwort für ${u.name}: `);
+    if (pw.length < 10) return console.error('mindestens 10 Zeichen');
+    if (pw !== await askHidden('Nochmal: ')) return console.error('stimmt nicht überein');
+    const salt = crypto.randomBytes(16); u.salt = salt.toString('hex'); u.hash = crypto.scryptSync(pw, salt, 32).toString('hex');
+    save(db); console.log(`Passwort für ${u.name} neu gesetzt`);
   } else if (cmd === 'remove' && name) {
     db.users = db.users.filter(u => u.name !== name.toLowerCase()); save(db); console.log('entfernt');
   } else if (cmd === 'list') {
     for (const u of db.users) console.log(`${u.name}${u.admin ? ' (Admin)' : ''}: Handys ${u.admin || u.devices === 'all' ? 'alle' : u.devices.join(', ') || 'keine'}`);
-  } else console.log(fs.readFileSync(__filename, 'utf8').split('\n').slice(1, 6).join('\n'));
+  } else console.log(fs.readFileSync(__filename, 'utf8').split('\n').slice(1, 7).join('\n'));
 })();
