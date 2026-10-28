@@ -1,7 +1,7 @@
 #!/bin/zsh
 # Einrichtung auf dem Betriebs-Mac. Braucht kein Xcode, kein Homebrew: Node und go-ios liegen in bin/, WDA in wda/.
 # Prüft alles, nimmt angesteckte iPhones auf, richtet den Autostart ein. Beliebig oft ausführbar.
-cd "$(dirname "$0")"
+cd "$(dirname "$0")"; mkdir -p logs
 ok() { echo "  ok    $1"; }; fehlt() { echo "  FEHLT $1"; }
 ask() { read -q "r?$1 [y/N] "; echo; [[ $r == y ]]; }
 

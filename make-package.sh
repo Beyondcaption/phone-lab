@@ -17,7 +17,7 @@ lipo -create bin/node-arm64 bin/node-x64 -output bin/node 2>/dev/null || cp bin/
 cp "$(readlink -f "$(command -v ios)")" bin/ios
 chmod +x bin/*
 OUT=~/Desktop/phone-lab-paket.tar.gz
-tar --exclude='phone-lab/logs' --exclude='phone-lab/.gstack' --exclude='phone-lab/.env' --exclude='phone-lab/.git' \
+tar --exclude='phone-lab/logs' --exclude='phone-lab/.gstack' --exclude='phone-lab/.env' --exclude='phone-lab/.git' --exclude='phone-lab/selfIdentity.plist' \
     --exclude='phone-lab/bin/node-*' -czf "$OUT" -C "$DIR/.." phone-lab
 echo "Paket: $OUT ($(du -h "$OUT" | cut -f1))"
 echo "Auf dem Betriebs-Mac: Archiv in den Benutzerordner, doppelklicken (entpackt), dann im Ordner phone-lab auf 'Start.command' doppelklicken."
