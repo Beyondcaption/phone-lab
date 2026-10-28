@@ -20,4 +20,4 @@ OUT=~/Desktop/phone-lab-paket.tar.gz
 tar --exclude='phone-lab/logs' --exclude='phone-lab/.gstack' --exclude='phone-lab/.env' --exclude='phone-lab/.git' --exclude='phone-lab/selfIdentity.plist' --exclude='phone-lab/users.json' \
     --exclude='phone-lab/bin/node-*' -czf "$OUT" -C "$DIR/.." phone-lab
 echo "Paket: $OUT ($(du -h "$OUT" | cut -f1))"
-echo "Auf dem Betriebs-Mac: Archiv in den Benutzerordner, doppelklicken (entpackt), dann im Ordner phone-lab auf 'Start.command' doppelklicken."
+echo "Auf dem Betriebs-Mac: Archiv in den Benutzerordner, doppelklicken (entpackt), im Terminal: xattr -dr com.apple.quarantine ~/phone-lab, dann Doppelklick auf Start.command."

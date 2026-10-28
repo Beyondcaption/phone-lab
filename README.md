@@ -30,7 +30,9 @@ Es gibt zwei Rollen von Macs:
 
 1. Archiv in den Benutzerordner, Doppelklick entpackt es.
 2. iPhones anstecken, auf jedem "Diesem Computer vertrauen".
-3. Im Ordner phone-lab Doppelklick auf `Start.command`. Es prüft das Paket, nimmt die iPhones auf, richtet den Autostart ein und öffnet die Kachel-Seite.
+3. Einmalig die macOS-Sperre für heruntergeladene Dateien aufheben, sonst meldet macOS "Start.command ist beschädigt".
+   Im Terminal: `xattr -dr com.apple.quarantine ~/phone-lab`
+   Dann im Ordner phone-lab Doppelklick auf `Start.command`. Es prüft das Paket, nimmt die iPhones auf, richtet den Autostart ein und öffnet die Kachel-Seite.
 4. Mit dem bezahlten Developer-Konto ist kein Vertrauens-Schritt auf dem iPhone nötig, WDA startet direkt.
    (Nur bei einer kostenlosen Apple-ID: Einstellungen > Allgemein > VPN und Geräteverwaltung > Entwickler-App vertrauen.)
 
