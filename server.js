@@ -1,0 +1,142 @@
+#!/usr/bin/env node
+// phone-lab Server: startet WDA je iPhone, reicht den MJPEG-Stream durch,
+// übersetzt Eingaben der Kachel-Seite in WDA-Aufrufe. Nur 127.0.0.1.
+'use strict';
+const http = require('http');
+const fs = require('fs');
+const path = require('path');
+const { spawn } = require('child_process');
+
+const ROOT = __dirname;
+const CFG = JSON.parse(fs.readFileSync(path.join(ROOT, 'devices.json'), 'utf8'));
+const PORT = 3000;
+const INSTAGRAM = 'com.burbn.instagram';
+const MJPEG = { mjpegServerFramerate: 8, mjpegScalingFactor: 50, mjpegServerScreenshotQuality: 40 };
+
+fs.mkdirSync(path.join(ROOT, 'logs'), { recursive: true });
+
+// ---------- WDA-HTTP ----------
+function wda(dev, method, p, body, timeout = 15000) {
+  return new Promise((resolve, reject) => {
+    const data = body === undefined ? null : JSON.stringify(body);
+    const req = http.request({ host: '127.0.0.1', port: dev.wda_port, method, path: p, timeout,
+      headers: data ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) } : {} }, res => {
+      let buf = '';
+      res.on('data', c => buf += c);
+      res.on('end', () => {
+        let j; try { j = JSON.parse(buf); } catch { return reject(new Error('WDA: keine JSON-Antwort')); }
+        if (res.statusCode >= 400 || (j.value && j.value.error)) return reject(new Error('WDA: ' + (j.value && j.value.error || res.statusCode)));
+        resolve(j);
+      });
+    });
+    req.on('timeout', () => req.destroy(new Error('WDA: Timeout')));
+    req.on('error', reject);
+    if (data) req.write(data);
+    req.end();
+  });
+}
+
+async function session(dev) {
+  if (dev.sid) return dev.sid;
+  const r = await wda(dev, 'POST', '/session', { capabilities: { alwaysMatch: {} } });
+  dev.sid = r.sessionId;
+  const size = (await wda(dev, 'GET', `/session/${dev.sid}/window/size`)).value;
+  dev.w = size.width; dev.h = size.height;
+  await wda(dev, 'POST', `/session/${dev.sid}/appium/settings`, { settings: MJPEG }).catch(() => {});
+  return dev.sid;
+}
+
+// Führt einen Aufruf mit Session aus; bei Session-Fehler einmal neu anlegen.
+async function withSession(dev, fn) {
+  try { return await fn(await session(dev)); }
+  catch (e) { dev.sid = null; return fn(await session(dev)); }
+}
+
+const touch = steps => ({ actions: [{ type: 'pointer', id: 'f1', parameters: { pointerType: 'touch' }, actions: steps }] });
+const px = (dev, nx, ny) => ({ x: Math.round(nx * dev.w), y: Math.round(ny * dev.h) });
+
+const cmd = {
+  tap: (dev, { x, y }) => withSession(dev, sid => wda(dev, 'POST', `/session/${sid}/actions`, touch([
+    { type: 'pointerMove', duration: 0, ...px(dev, x, y) }, { type: 'pointerDown', button: 0 },
+    { type: 'pause', duration: 60 }, { type: 'pointerUp', button: 0 }]))),
+  doubletap: (dev, { x, y }) => withSession(dev, sid => wda(dev, 'POST', `/session/${sid}/actions`, touch([
+    { type: 'pointerMove', duration: 0, ...px(dev, x, y) }, { type: 'pointerDown', button: 0 },
+    { type: 'pause', duration: 50 }, { type: 'pointerUp', button: 0 }, { type: 'pause', duration: 90 },
+    { type: 'pointerDown', button: 0 }, { type: 'pause', duration: 50 }, { type: 'pointerUp', button: 0 }]))),
+  swipe: (dev, { x1, y1, x2, y2, ms = 300 }) => withSession(dev, sid => wda(dev, 'POST', `/session/${sid}/actions`, touch([
+    { type: 'pointerMove', duration: 0, ...px(dev, x1, y1) }, { type: 'pointerDown', button: 0 },
+    { type: 'pause', duration: 60 }, { type: 'pointerMove', duration: ms, ...px(dev, x2, y2) },
+    { type: 'pointerUp', button: 0 }]))),
+  text: (dev, { text }) => withSession(dev, sid => wda(dev, 'POST', `/session/${sid}/wda/keys`, { value: [String(text)] })),
+  home: dev => wda(dev, 'POST', '/wda/homescreen'),
+  instagram: dev => withSession(dev, sid => wda(dev, 'POST', `/session/${sid}/wda/apps/launch`, { bundleId: INSTAGRAM })),
+};
+
+// ---------- WDA-Prozess je Gerät mit Neustart ----------
+function startWda(dev) {
+  if (dev.stopping) return;
+  const log = fs.openSync(path.join(ROOT, 'logs', `handy-${dev.id}.log`), 'a');
+  const child = spawn(path.join(ROOT, 'wda-start.sh'), [dev.udid, String(dev.wda_port), String(dev.mjpeg_port)],
+    { detached: true, stdio: ['ignore', log, log] });
+  dev.proc = child; dev.sid = null; dev.fails = 0; dev.started = Date.now();
+  console.log(`[${dev.name}] WDA gestartet (pid ${child.pid})`);
+  child.on('exit', code => {
+    console.log(`[${dev.name}] WDA beendet (code ${code}), Neustart in 5 s`);
+    dev.proc = null; dev.sid = null;
+    setTimeout(() => startWda(dev), 5000);
+  });
+}
+function killWda(dev) {
+  if (dev.proc) { try { process.kill(-dev.proc.pid, 'SIGTERM'); } catch {} }
+}
+
+async function health(dev) {
+  try {
+    const r = await wda(dev, 'GET', '/status', undefined, 3000);
+    dev.ready = !!r.value.ready; dev.fails = 0;
+    const b = await withSession(dev, sid => wda(dev, 'GET', `/session/${sid}/wda/batteryInfo`, undefined, 3000)).catch(() => null);
+    dev.battery = b && b.value.level >= 0 ? Math.round(b.value.level * 100) : null;
+  } catch {
+    dev.ready = false; dev.sid = null;
+    // ponytail: erst nach 60 s Startzeit zählen, xcodebuild braucht ~10-40 s bis WDA antwortet
+    if (Date.now() - dev.started > 60000 && ++dev.fails >= 3) { console.log(`[${dev.name}] WDA antwortet nicht, Neustart`); dev.fails = 0; killWda(dev); }
+  }
+}
+
+// ---------- HTTP ----------
+function json(res, code, obj) { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(obj)); }
+function body(req) { return new Promise(r => { let b = ''; req.on('data', c => b += c); req.on('end', () => { try { r(JSON.parse(b || '{}')); } catch { r({}); } }); }); }
+
+const server = http.createServer(async (req, res) => {
+  const [, route, idStr, action] = req.url.split('?')[0].split('/');
+  const dev = CFG.devices.find(d => String(d.id) === idStr);
+  if (req.method === 'GET' && (route === '' || route === undefined)) {
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    return fs.createReadStream(path.join(ROOT, 'index.html')).pipe(res);
+  }
+  if (req.method === 'GET' && route === 'devices') {
+    return json(res, 200, CFG.devices.map(d => ({ id: d.id, name: d.name, ready: !!d.ready, battery: d.battery ?? null, w: d.w, h: d.h, running: !!d.proc })));
+  }
+  if (!dev) return json(res, 404, { error: 'unbekanntes Gerät' });
+  if (req.method === 'GET' && route === 'stream') {
+    const up = http.request({ host: '127.0.0.1', port: dev.mjpeg_port, path: '/', method: 'GET' }, upRes => {
+      res.writeHead(200, { 'Content-Type': upRes.headers['content-type'] || 'multipart/x-mixed-replace; boundary=--BoundaryString', 'Cache-Control': 'no-cache' });
+      upRes.pipe(res);
+    });
+    up.on('error', () => { if (!res.headersSent) res.writeHead(502); res.end(); });
+    res.on('close', () => up.destroy());
+    return up.end();
+  }
+  if (req.method === 'POST' && route === 'cmd' && cmd[action]) {
+    try { await cmd[action](dev, await body(req)); return json(res, 200, { ok: true }); }
+    catch (e) { return json(res, 502, { ok: false, error: e.message }); }
+  }
+  json(res, 404, { error: 'nicht gefunden' });
+});
+
+for (const dev of CFG.devices) { dev.started = Date.now(); startWda(dev); }
+setInterval(() => CFG.devices.forEach(health), 10000);
+server.listen(PORT, '127.0.0.1', () => console.log(`phone-lab läuft auf http://127.0.0.1:${PORT}`));
+
+function shutdown() { for (const d of CFG.devices) { d.stopping = true; killWda(d); } process.exit(0); }
+process.on('SIGINT', shutdown); process.on('SIGTERM', shutdown);

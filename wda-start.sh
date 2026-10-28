@@ -3,9 +3,12 @@
 # Aufruf: ./wda-start.sh <udid> <wda_port> <mjpeg_port>
 set -e
 UDID=$1; WDA_PORT=$2; MJPEG_PORT=$3
-TEAM=$(python3 -c "import json;print(json.load(open('$(dirname $0)/devices.json'))['team_id'])")
-BUNDLE=$(python3 -c "import json;print(json.load(open('$(dirname $0)/devices.json'))['wda_bundle_id'])")
+DIR=$(cd "$(dirname "$0")" && pwd)
+TEAM=$(python3 -c "import json;print(json.load(open('$DIR/devices.json'))['team_id'])")
+BUNDLE=$(python3 -c "import json;print(json.load(open('$DIR/devices.json'))['wda_bundle_id'])")
 WDA=~/.appium/node_modules/appium-xcuitest-driver/node_modules/appium-webdriveragent
+pkill -f "iproxy $WDA_PORT:" || true
+pkill -f "iproxy $MJPEG_PORT:" || true
 iproxy "$WDA_PORT:8100" -u "$UDID" &
 iproxy "$MJPEG_PORT:9100" -u "$UDID" &
 cd "$WDA"
