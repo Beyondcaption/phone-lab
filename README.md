@@ -56,9 +56,9 @@ weiterleitet. Der Mac selbst ist aus dem Internet nie erreichbar, die Seite nur 
 ### Tailscale einrichten (einmalig je Mac)
 
 1. Tailscale-App installieren und mit dem eigenen Konto anmelden.
-2. Freigabe: `/Applications/Tailscale.app/Contents/MacOS/Tailscale serve --bg --http=80 3000` (bleibt nach Neustart erhalten).
-   Adresse im Tailnet: http://<mac-name>.<tailnet>.ts.net, der Verkehr ist durch Tailscale verschlüsselt.
-   Mit HTTPS-Zertifikaten im Tailnet (Admin-Konsole > DNS > HTTPS Certificates) geht stattdessen `serve --bg 3000` und https://...
+2. In der Admin-Konsole unter DNS "HTTPS Certificates" einschalten. Dann Freigabe:
+   `/Applications/Tailscale.app/Contents/MacOS/Tailscale serve --bg 3000` (bleibt nach Neustart erhalten).
+   Adresse im Tailnet: https://<mac-name>.<tailnet>.ts.net, hier https://macbook-air-von-berkin.tail330fca.ts.net
 3. VAs einladen: Admin-Konsole > Users > Invite. Jede VA installiert Tailscale auf ihrem Rechner und meldet sich an.
 4. VAs auf die Seite beschränken (Admin-Konsole > Access controls), den Mac vorher mit tag:phonelab versehen:
 
