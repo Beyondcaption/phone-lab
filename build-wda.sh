@@ -13,7 +13,7 @@ WDA=~/.appium/node_modules/appium-xcuitest-driver/node_modules/appium-webdrivera
 cd "$WDA"
 for U in $UDIDS; do
   echo "== Baue und registriere $U =="
-  xcodebuild -project WebDriverAgent.xcodeproj -scheme WebDriverAgentRunner -destination "id=$U" -allowProvisioningUpdates \
+  xcodebuild -project WebDriverAgent.xcodeproj -scheme WebDriverAgentRunner -destination "id=$U" -allowProvisioningUpdates -allowProvisioningDeviceRegistration \
     DEVELOPMENT_TEAM="$TEAM" CODE_SIGN_IDENTITY="Apple Development" PRODUCT_BUNDLE_IDENTIFIER="$BUNDLE" \
     build-for-testing 2>&1 | grep -E 'error:|\*\* ' || true
 done
