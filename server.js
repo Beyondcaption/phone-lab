@@ -11,7 +11,8 @@ const ROOT = __dirname;
 const CFG = JSON.parse(fs.readFileSync(path.join(ROOT, 'devices.json'), 'utf8'));
 const PORT = 3000;
 const INSTAGRAM = 'com.burbn.instagram';
-const MJPEG = { mjpegServerFramerate: 8, mjpegScalingFactor: 50, mjpegServerScreenshotQuality: 40 };
+// waitForIdleTimeout 0 und animationCoolOffTimeout 0: WDA wartet nicht auf Ruhe der App, Eingaben kommen sofort an
+const SETTINGS = { mjpegServerFramerate: 12, mjpegScalingFactor: 60, mjpegServerScreenshotQuality: 50, waitForIdleTimeout: 0, animationCoolOffTimeout: 0 };
 
 fs.mkdirSync(path.join(ROOT, 'logs'), { recursive: true });
 
@@ -42,7 +43,7 @@ async function session(dev) {
   dev.sid = r.sessionId;
   const size = (await wda(dev, 'GET', `/session/${dev.sid}/window/size`)).value;
   dev.w = size.width; dev.h = size.height;
-  await wda(dev, 'POST', `/session/${dev.sid}/appium/settings`, { settings: MJPEG }).catch(() => {});
+  await wda(dev, 'POST', `/session/${dev.sid}/appium/settings`, { settings: SETTINGS }).catch(() => {});
   return dev.sid;
 }
 
@@ -56,13 +57,14 @@ const touch = steps => ({ actions: [{ type: 'pointer', id: 'f1', parameters: { p
 const px = (dev, nx, ny) => ({ x: Math.round(nx * dev.w), y: Math.round(ny * dev.h) });
 
 const cmd = {
+  // W3C-Actions sind hier ~0,55 s je Tipp, wda/tap ~0,85 s. Der Rest ist XCTest-Grundlatenz.
   tap: (dev, { x, y }) => withSession(dev, sid => wda(dev, 'POST', `/session/${sid}/actions`, touch([
-    { type: 'pointerMove', duration: 0, ...px(dev, x, y) }, { type: 'pointerDown', button: 0 },
-    { type: 'pause', duration: 60 }, { type: 'pointerUp', button: 0 }]))),
+    { type: 'pointerMove', duration: 0, ...px(dev, +x, +y) }, { type: 'pointerDown', button: 0 },
+    { type: 'pause', duration: 40 }, { type: 'pointerUp', button: 0 }]))),
   doubletap: (dev, { x, y }) => withSession(dev, sid => wda(dev, 'POST', `/session/${sid}/actions`, touch([
-    { type: 'pointerMove', duration: 0, ...px(dev, x, y) }, { type: 'pointerDown', button: 0 },
-    { type: 'pause', duration: 50 }, { type: 'pointerUp', button: 0 }, { type: 'pause', duration: 90 },
-    { type: 'pointerDown', button: 0 }, { type: 'pause', duration: 50 }, { type: 'pointerUp', button: 0 }]))),
+    { type: 'pointerMove', duration: 0, ...px(dev, +x, +y) }, { type: 'pointerDown', button: 0 },
+    { type: 'pause', duration: 40 }, { type: 'pointerUp', button: 0 }, { type: 'pause', duration: 80 },
+    { type: 'pointerDown', button: 0 }, { type: 'pause', duration: 40 }, { type: 'pointerUp', button: 0 }]))),
   // Wischt entlang der Mausspur: path = [{x,y,t}], t in ms ab Start, x/y als Anteil 0..1
   swipe: (dev, { path }) => {
     if (!Array.isArray(path) || path.length < 2) throw new Error('swipe braucht path');

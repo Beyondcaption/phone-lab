@@ -6,13 +6,14 @@
 <style>
   body { margin: 0; background: #111; color: #ddd; font: 14px system-ui, sans-serif; }
   #grid { display: flex; flex-wrap: wrap; gap: 16px; padding: 16px; }
-  .tile { background: #1c1c1c; border-radius: 8px; padding: 8px; width: 300px; }
-  .tile.big { width: 600px; }
+  .tile { background: #1c1c1c; border-radius: 8px; padding: 8px; width: 375px; }
+  .tile.big { width: 750px; }
   .head { display: flex; justify-content: space-between; margin-bottom: 6px; }
   .dot { display: inline-block; width: 10px; height: 10px; border-radius: 5px; background: #c33; margin-right: 6px; }
   .dot.on { background: #3c3; }
   .screen { position: relative; background: #000; aspect-ratio: 375 / 667; cursor: crosshair; user-select: none; }
   .screen img { width: 100%; height: 100%; display: block; pointer-events: none; }
+  .screen canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
   .ctl { display: flex; gap: 6px; margin-top: 6px; }
   .ctl input { flex: 1; background: #222; color: #ddd; border: 1px solid #444; padding: 6px; }
   button { background: #333; color: #ddd; border: 1px solid #555; padding: 6px 10px; cursor: pointer; }
@@ -32,37 +33,51 @@ function tile(d) {
   el.className = 'tile'; el.id = 't' + d.id;
   el.innerHTML = `
     <div class="head"><b>${d.name}</b><span><span class="dot"></span><span class="st">...</span></span></div>
-    <div class="screen"><img src="/stream/${d.id}" alt=""></div>
-    <div class="ctl"><input placeholder="Text eingeben, Enter sendet"><button class="send">Senden</button></div>
+    <div class="screen"><img src="/stream/${d.id}" alt=""><canvas></canvas></div>
+    <div class="ctl"><input placeholder="Text eingeben, Enter sendet" title="Shift+Klick auf dem Bild = Doppeltipp"><button class="send">Senden</button></div>
     <div class="ctl"><button class="home">Home</button><button class="ig">Instagram</button><button class="zoom">Groß</button></div>
     <div class="msg"></div>`;
-  const scr = el.querySelector('.screen'), img = el.querySelector('img'), inp = el.querySelector('input');
+  const scr = el.querySelector('.screen'), img = el.querySelector('img'), inp = el.querySelector('input'), cv = el.querySelector('canvas');
+
+  // Leuchtspur: Linie entlang der Mausspur, Ring beim Tippen, blendet nach dem Loslassen aus
+  let trail = [], trailAlpha = 0;
+  const draw = () => {
+    cv.width = scr.clientWidth; cv.height = scr.clientHeight;
+    const c = cv.getContext('2d'); c.clearRect(0, 0, cv.width, cv.height);
+    if (!trail.length || trailAlpha <= 0) return;
+    c.globalAlpha = trailAlpha; c.strokeStyle = '#4af'; c.fillStyle = '#4af'; c.lineWidth = 4; c.lineCap = 'round'; c.lineJoin = 'round';
+    c.shadowColor = '#4af'; c.shadowBlur = 12;
+    c.beginPath(); trail.forEach((p, i) => c[i ? 'lineTo' : 'moveTo'](p.x * cv.width, p.y * cv.height)); c.stroke();
+    const l = trail[trail.length - 1]; c.beginPath(); c.arc(l.x * cv.width, l.y * cv.height, 7, 0, 7); c.fill();
+  };
+  const fade = () => { trailAlpha -= 0.05; draw(); if (trailAlpha > 0) requestAnimationFrame(fade); else trail = []; };
+  const flash = p => { trail = [p]; trailAlpha = 1; draw(); setTimeout(fade, 150); };
   const norm = e => { const r = scr.getBoundingClientRect(); return { x: Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)), y: Math.min(1, Math.max(0, (e.clientY - r.top) / r.height)) }; };
 
-  // Linke Maustaste: Klick = tippen, Doppelklick = Doppeltipp, gedrückt ziehen = wischen entlang der Mausspur
-  let down = null, pathPts = [], tapTimer = null, lastTap = 0;
+  // Linke Maustaste: Klick = tippen (sofort), zweiter Klick innerhalb 300 ms oder Shift+Klick = Doppeltipp, gedrückt ziehen = wischen entlang der Mausspur
+  let down = null, pathPts = [], lastTap = 0;
   scr.addEventListener('contextmenu', e => e.preventDefault());
   scr.addEventListener('pointerdown', e => {
     if (e.button !== 0) return;
     down = { ...norm(e), t: Date.now() }; pathPts = [{ ...down, t: 0 }]; scr.setPointerCapture(e.pointerId);
+    trail = [down]; trailAlpha = 1; draw();
   });
   scr.addEventListener('pointermove', e => {
     if (!down) return;
     const p = { ...norm(e), t: Date.now() - down.t };
-    if (p.t - pathPts[pathPts.length - 1].t >= 25) pathPts.push(p);
+    if (p.t - pathPts[pathPts.length - 1].t >= 25) { pathPts.push(p); trail.push(p); draw(); }
   });
   const finish = e => {
     if (!down) return;
     const up = { ...norm(e), t: Date.now() - down.t }, start = down; down = null;
-    pathPts.push(up);
+    pathPts.push(up); trail.push(up); draw(); setTimeout(fade, 200);
     const far = pathPts.some(p => Math.hypot((p.x - start.x) * scr.clientWidth, (p.y - start.y) * scr.clientHeight) > 12);
     if (far) { post(d.id, 'swipe', { path: pathPts }); return; }
-    if (Date.now() - lastTap < 300) { clearTimeout(tapTimer); lastTap = 0; post(d.id, 'doubletap', up); return; }
-    lastTap = Date.now();
-    tapTimer = setTimeout(() => post(d.id, 'tap', up), 300);
+    if (e.shiftKey || Date.now() - lastTap < 300) { lastTap = 0; post(d.id, 'doubletap', up); note(d.id, 'Doppeltipp'); return; }
+    lastTap = Date.now(); post(d.id, 'tap', up);
   };
   scr.addEventListener('pointerup', e => e.button === 0 && finish(e));
-  scr.addEventListener('pointercancel', () => down = null);
+  scr.addEventListener('pointercancel', () => { down = null; fade(); });
 
   const send = () => { if (inp.value) { post(d.id, 'text', { text: inp.value }); inp.value = ''; } };
   el.querySelector('.send').onclick = send;
