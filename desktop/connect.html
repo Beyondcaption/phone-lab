@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<title>phone-lab · connect</title>
+<style>
+  body { margin: 0; background: #0c0d0f; color: #fff; font: 14px/20px system-ui, -apple-system, "Segoe UI", sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 16px; box-sizing: border-box; -webkit-font-smoothing: antialiased; }
+  main { background: #15171a; padding: 28px; border-radius: 20px; width: 420px; max-width: 100%; display: flex; flex-direction: column; gap: 16px; }
+  h1 { font-size: 20px; line-height: 28px; font-weight: 600; margin: 0; display: flex; align-items: center; gap: 10px; }
+  p { margin: 0; color: #b4b4b4; }
+  label { display: flex; flex-direction: column; gap: 8px; color: #b4b4b4; font-weight: 500; font-size: 13px; }
+  input { height: 40px; padding: 0 12px; border-radius: 10px; border: 1px solid #444; background: #0c0d0f; color: #fff; font: inherit; }
+  input::placeholder { color: #949494; }
+  button { height: 40px; border-radius: 999px; border: 1px solid #444; background: transparent; color: #fff; font: 500 14px system-ui, sans-serif; cursor: pointer; padding: 0 18px; }
+  button.primary { background: #fff; color: #000; border-color: #fff; }
+  button:hover { background: #222428; } button.primary:hover { background: #e6e6e6; }
+  button:disabled { opacity: .5; cursor: default; }
+  :focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .msg { min-height: 20px; color: #f07a8c; }
+  .msg.ok { color: #c6f24e; }
+  .local { background: #222428; border-radius: 12px; padding: 12px 14px; display: flex; align-items: center; gap: 12px; }
+  .local span { flex: 1; color: #b4b4b4; }
+  .foot { color: #949494; font-size: 12px; }
+</style>
+</head>
+<body>
+<main>
+  <h1><svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><rect x="5.5" y="1.5" width="11" height="19" rx="3" fill="none" stroke="#fff" stroke-width="1.6"/><rect x="8" y="6" width="6" height="9" rx="1" fill="#c6f24e"/></svg>Connect to phone-lab</h1>
+  <p>Enter the address of the Mac the phones are plugged into. Your admin sends it to you, usually ending in .ts.net.</p>
+  <div class="local" id="local" hidden><span>phone-lab is running on this Mac.</span><button id="useLocal">Use this Mac</button></div>
+  <label>Server address <input id="url" placeholder="e.g. mac-mini.tail1234.ts.net" autofocus spellcheck="false"></label>
+  <div class="row"><button class="primary" id="go">Connect</button><button id="test">Test</button></div>
+  <div class="msg" id="msg" role="alert"></div>
+  <div class="foot" id="foot"></div>
+</main>
+<script>
+  const q = new URLSearchParams(location.search), $ = id => document.getElementById(id);
+  $('url').value = q.get('current') || ''; $('msg').textContent = q.get('msg') || '';
+  const busy = on => { $('go').disabled = on; $('test').disabled = on; };
+  $('test').onclick = async () => { busy(true); $('msg').className = 'msg'; $('msg').textContent = 'Testing…';
+    const r = await desk.probe($('url').value); busy(false);
+    $('msg').className = 'msg' + (r.ok ? ' ok' : ''); $('msg').textContent = r.ok ? `phone-lab answers at ${r.origin}` : `Not reachable: ${r.error}`; };
+  const go = async v => { busy(true); $('msg').className = 'msg'; $('msg').textContent = 'Connecting…';
+    const r = await desk.connect(v); busy(false); if (!r.ok) $('msg').textContent = `Not reachable: ${r.error}`; };
+  $('go').onclick = () => go($('url').value);
+  $('url').addEventListener('keydown', e => { if (e.key === 'Enter') go($('url').value); });
+  $('useLocal').onclick = () => go('http://127.0.0.1:3000');
+  desk.info().then(i => { $('foot').textContent = `phone-lab Desk ${i.version}`; $('local').hidden = !i.local; });
+</script>
+</body>
+</html>

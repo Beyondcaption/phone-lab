@@ -1,0 +1,59 @@
+name: Build phone-lab Desk
+
+# Tag desktop-vX.Y.Z bauen und als Release hochladen. Der phone-lab-Server reicht die Dateien unter /desktop/ an die Apps durch.
+on:
+  push:
+    tags:
+      - 'desktop-v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+defaults:
+  run:
+    working-directory: desktop
+    shell: bash
+
+jobs:
+  build-win:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund
+      - name: Version from tag
+        if: startsWith(github.ref, 'refs/tags/desktop-v')
+        run: npm version "${GITHUB_REF_NAME#desktop-v}" --no-git-tag-version --allow-same-version
+      # latest.yml MUSS mit dem Installer hochgeladen werden, sonst findet electron-updater kein Update
+      - run: npx electron-builder --win --x64 --publish never
+      - name: Upload to release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/desktop-v')
+        with:
+          files: |
+            desktop/dist/*.exe
+            desktop/dist/latest.yml
+
+  build-mac:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund
+      - name: Version from tag
+        if: startsWith(github.ref, 'refs/tags/desktop-v')
+        run: npm version "${GITHUB_REF_NAME#desktop-v}" --no-git-tag-version --allow-same-version
+      # Je Architektur ein eigener Lauf: zwei DMGs gleichzeitig hängen dasselbe Volume ein und scheitern an hdiutil detach.
+      # Die Architektur kommt nur aus diesen Flags, nie aus einer arch-Liste in package.json (die überstimmt sie).
+      - run: npx electron-builder --mac --x64 --publish never
+      - run: npx electron-builder --mac --arm64 --publish never
+      - name: Upload to release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/desktop-v')
+        with:
+          files: desktop/dist/*.dmg

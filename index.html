@@ -788,7 +788,9 @@ async function refreshMe() {
 }
 
 // ---------- status refresh ----------
-let statusCache = [];
+let statusCache = [], seenAlerts = null;
+// the browser asks once for permission to notify, on the first click; the desktop app allows it without asking
+document.addEventListener('pointerdown', () => { if (window.Notification && Notification.permission === 'default') Notification.requestPermission(); }, { once: true });
 function health(d) {
   const parts = [];
   if (d.ios) parts.push('iOS ' + d.ios);
@@ -822,6 +824,13 @@ function refreshStatus() {
   bits.push(`${ready} of ${statusCache.length} ready`);
   $('#finding').innerHTML = bits.join(' · ');
   const ac = $('#alertCount'); ac.hidden = !alerts.length; ac.textContent = alerts.length;
+  // new alerts as a system notification (desktop app and browser); the first load only remembers what is already there
+  const firstLoad = !seenAlerts; if (firstLoad) seenAlerts = new Set();
+  for (const d of alerts) {
+    const key = d.id + '|' + d.warmup.alert.at;
+    if (!firstLoad && !seenAlerts.has(key) && window.Notification && Notification.permission === 'granted') new Notification(`phone-lab: ${d.name} stopped`, { body: d.warmup.alert.reason });
+    seenAlerts.add(key);
+  }
   $('#sideFoot').textContent = `${statusCache.length} phones over USB`;
 }
 function rebootPhone(id) { if (confirm('Reboot this phone? It will be offline for about a minute.')) post(id, 'reboot').then(j => j && j.ok && note(id, 'Rebooting')); }

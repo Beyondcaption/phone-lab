@@ -1,0 +1,49 @@
+{
+  "name": "phone-lab-desk",
+  "productName": "phone-lab Desk",
+  "version": "1.0.0",
+  "description": "Desktop app for phone-lab: the dashboard in its own window, on the Mac with the phones and on the VAs' computers",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "build:win": "electron-builder --win --x64 --publish never",
+    "build:mac": "electron-builder --mac --x64 --publish never && electron-builder --mac --arm64 --publish never"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.11"
+  },
+  "devDependencies": {
+    "electron": "^45.1.0",
+    "electron-builder": "^26.18.0"
+  },
+  "build": {
+    "appId": "com.cansap.phonelab.desk",
+    "productName": "phone-lab Desk",
+    "files": ["main.js", "preload.js", "connect.html", "build/icon.png"],
+    "directories": { "buildResources": "build", "output": "dist" },
+    "publish": [{ "provider": "generic", "url": "http://127.0.0.1:3000/desktop/" }],
+    "win": {
+      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "artifactName": "phone-lab-Desk-Setup-${version}.exe"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "phone-lab Desk"
+    },
+    "mac": {
+      "target": ["dmg"],
+      "category": "public.app-category.productivity",
+      "identity": null
+    },
+    "dmg": {
+      "title": "phone-lab Desk",
+      "artifactName": "phone-lab-Desk-Mac-${arch}.dmg",
+      "writeUpdateInfo": false,
+      "contents": [{ "x": 130, "y": 220 }, { "x": 410, "y": 220, "type": "link", "path": "/Applications" }]
+    }
+  }
+}

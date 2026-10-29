@@ -137,6 +137,14 @@ FileVault an, Firewall an (geprüft am 28.10.2026). Automatische Anmeldung nur, 
 - Jeder sieht in der Leiste seine Tageswerte und Ziele. Apps in devices.json unter "apps" (Name: Bundle-ID).
 - settings.json (Snippets, Notizen, Ziele) und users.json bleiben beim App-Update erhalten.
 
+## phone-lab Desk (Desktop-App für Mac und Windows)
+
+- Ordner desktop/: Electron-App, die das Dashboard in einem eigenen Fenster zeigt. Auf dem Mac mit den iPhones verbindet sie sich von selbst mit dem lokalen Server (die phone-lab.app im Hintergrund bleibt der Server), auf den Rechnern der VAs fragt sie einmal nach der Tailscale-Adresse des Macs. Menü Server: Adresse ändern, Neu laden, Updates prüfen. Neue Alarme kommen als Systembenachrichtigung.
+- Bauen: Tag `desktop-vX.Y.Z` pushen, GitHub Actions (.github/workflows/desktop.yml) baut Windows-Installer + latest.yml und je ein Mac-DMG für Intel und Apple Silicon und hängt sie an das Release.
+- Updates: Der Server reicht die Release-Dateien unter /desktop/ durch, dafür `GITHUB_TOKEN=...` (fine-grained, nur Lesen, Contents, Repo phone-lab) in die .env des Servers. Windows installiert Updates selbst, der Mac lädt das neue DMG in den Download-Ordner (ohne Quarantäne). Ohne Token bleibt jede App einfach auf ihrer Version.
+- Mac, erster Start der unsignierten App: Systemeinstellungen > Datenschutz & Sicherheit > "Dennoch öffnen", oder `xattr -dr com.apple.quarantine "/Applications/phone-lab Desk.app"`.
+- Lokal: `cd desktop && npm install && npm start`, Installer mit `npm run build:win` bzw. `build:mac`.
+
 ## Warmup
 
 - Admin trägt je Handy unter Warmup ein Startdatum und die Nische ein. Ab dem Tag gilt die 14-Tage-Vorlage (ebenda änderbar): Claude-Minuten und Sitzungen, Likes und Kommentare als Tagesziel der VA, Post-Tage.

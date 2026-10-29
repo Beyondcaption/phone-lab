@@ -3,6 +3,7 @@
 // übersetzt Eingaben der Kachel-Seite in WDA-Aufrufe. Nur 127.0.0.1.
 'use strict';
 const http = require('http');
+const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
@@ -335,6 +336,44 @@ function grabFrame(dev) {
   });
 }
 
+// ---------- Updates für phone-lab Desk: GitHub-Releases mit Tag desktop-v* durchreichen ----------
+// Das Repo ist privat; der Token (nur Lesen, Contents) bleibt auf dem Mac. Beim Sprung von GitHub auf den Speicher-Host
+// geht der Authorization-Kopf NICHT mit, sonst lehnt der Speicher ab. Fehlt etwas, antwortet der Server 404: die App bleibt
+// dann einfach auf ihrer Version (fail-open).
+const REPO = process.env.PHONELAB_REPO || 'Beyondcaption/phone-lab';
+let relCache = null, relAt = 0;
+function ghGet(url, accept, auth = true) {
+  return new Promise((resolve, reject) => {
+    const headers = { 'User-Agent': 'phone-lab', Accept: accept };
+    if (auth) headers.Authorization = 'Bearer ' + String(process.env.GITHUB_TOKEN || '').replace(/[^\x21-\x7E]/g, '');
+    https.get(url, { headers, timeout: 15000 }, resolve).on('error', reject).on('timeout', function () { this.destroy(new Error('GitHub timeout')); });
+  });
+}
+async function desktopRelease() {
+  if (relCache && Date.now() - relAt < 600000) return relCache;
+  const res = await ghGet(`https://api.github.com/repos/${REPO}/releases?per_page=30`, 'application/vnd.github+json');
+  let b = ''; for await (const c of res) b += c;
+  if (res.statusCode !== 200) throw new Error('GitHub ' + res.statusCode);
+  const r = JSON.parse(b).find(x => !x.draft && /^desktop-v\d+\.\d+\.\d+$/.test(x.tag_name));
+  relCache = r ? { version: r.tag_name.slice('desktop-v'.length), assets: r.assets.map(a => ({ name: a.name, id: a.id, size: a.size })) } : null; relAt = Date.now();
+  return relCache;
+}
+async function desktopUpdate(res, name) {
+  if (!process.env.GITHUB_TOKEN) return json(res, 404, { error: 'updates not configured (GITHUB_TOKEN)' });
+  try {
+    const rel = await desktopRelease();
+    if (!rel) return json(res, 404, { error: 'no desktop release yet' });
+    if (name === 'version') return json(res, 200, { version: rel.version, assets: rel.assets.map(a => a.name) });
+    const asset = rel.assets.find(a => a.name === decodeURIComponent(name || ''));
+    if (!asset) return json(res, 404, { error: 'unknown file' });
+    const first = await ghGet(`https://api.github.com/repos/${REPO}/releases/assets/${asset.id}`, 'application/octet-stream');
+    const up = first.statusCode === 302 || first.statusCode === 301 ? (first.resume(), await ghGet(first.headers.location, 'application/octet-stream', false)) : first;
+    if (up.statusCode !== 200) { up.resume(); return json(res, 502, { error: 'GitHub ' + up.statusCode }); }
+    res.writeHead(200, { 'Content-Type': name.endsWith('.yml') ? 'text/yaml' : 'application/octet-stream', 'Content-Length': up.headers['content-length'] || asset.size, 'Cache-Control': 'no-cache' });
+    up.pipe(res);
+  } catch (e) { json(res, 502, { error: e.message }); }
+}
+
 // ---------- HTTP ----------
 function json(res, code, obj) { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(obj)); }
 function rawBody(req) { return new Promise(r => { let b = ''; req.on('data', c => b += c); req.on('end', () => r(b)); }); }
@@ -362,6 +401,8 @@ const server = http.createServer(async (req, res) => {
     protokoll(u.name, ip, 'login');
     res.writeHead(303, { 'Set-Cookie': `pl=${token}; HttpOnly; SameSite=Strict; Path=/${secure}`, Location: '/' }); return res.end();
   }
+  // Updates für phone-lab Desk, ohne Anmeldung (die App enthält keine Schlüssel). Nur mit GITHUB_TOKEN in .env, sonst 404.
+  if (req.method === 'GET' && route === 'desktop') return desktopUpdate(res, idStr);
   // Nur im Testbetrieb ohne iPhones: PHONELAB_AUTOLOGIN=name meldet jede Anfrage ohne Cookie als diesen Admin an (für Screenshots)
   const user = cookie(req) || (FAKE && process.env.PHONELAB_AUTOLOGIN ? { name: process.env.PHONELAB_AUTOLOGIN, admin: true, devices: 'all', ip } : null);
   if (route === 'logout') {
