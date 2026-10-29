@@ -14,7 +14,7 @@ echo "$TODAY-$N" > VERSION; VER=$(cat VERSION); echo "Version $VER"
 B=/tmp/phone-lab-app-build; rm -rf "$B"; mkdir -p "$B"
 APP="$B/phone-lab.app"; R="$APP/Contents/Resources/app"
 mkdir -p "$APP/Contents/MacOS" "$R/bin"
-cp VERSION server.js warmup.js index.html usbmux.js plist.js user.js devices.json README.md "$R/"
+cp VERSION server.js warmup.js index.html charts.js usbmux.js plist.js user.js devices.json README.md "$R/"
 cp bin/node bin/ios "$R/bin/"; cp -R wda "$R/wda"; cp -R devimages "$R/devimages"
 cp "$DIR/app/launcher.sh" "$APP/Contents/MacOS/phone-lab"; chmod +x "$APP/Contents/MacOS/phone-lab" "$R/bin/"*
 

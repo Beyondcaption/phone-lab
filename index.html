@@ -4,200 +4,451 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>phone-lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-  :root { --bg: #111; --panel: #1c1c1c; --line: #333; --text: #ddd; --muted: #888; --ok: #3c3; --bad: #c33; --warn: #e94; --accent: #4af; }
-  * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--text); font: 14px system-ui, sans-serif; }
-  #bar { display: flex; align-items: center; gap: 10px; padding: 8px 16px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--bg); z-index: 5; flex-wrap: wrap; }
-  #bar b { font-size: 16px; }
-  #bar .sp { flex: 1; }
-  #me { color: var(--muted); font-size: 13px; }
-  #me .bar { display: inline-block; width: 90px; height: 6px; background: #333; border-radius: 3px; vertical-align: middle; margin: 0 6px; overflow: hidden; }
-  #me .bar i { display: block; height: 100%; background: var(--accent); }
-  button { background: #2a2a2a; color: var(--text); border: 1px solid #444; padding: 6px 10px; border-radius: 6px; cursor: pointer; font: inherit; }
-  button:hover { background: #383838; }
-  button.on { background: #264; border-color: #3a7; }
-  button.primary { background: #2a4d7a; border-color: #3a6aa6; }
-  button.danger { border-color: #844; }
-  button.small { padding: 3px 7px; font-size: 12px; }
-  select, input[type=text], input[type=number], textarea { background: #222; color: var(--text); border: 1px solid #444; padding: 6px 8px; border-radius: 6px; font: inherit; }
-  textarea { width: 100%; min-height: 70px; font-size: 13px; }
-  label { color: var(--muted); font-size: 13px; }
-  #grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; padding: 16px; }
-  .tile { background: var(--panel); border-radius: 10px; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
-  .head { display: flex; align-items: center; gap: 8px; font-size: 13px; }
-  .head b { font-size: 14px; white-space: nowrap; }
-  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--bad); flex: none; }
-  .dot.on { background: var(--ok); }
-  .st { color: var(--muted); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .label { color: var(--accent); font-size: 12px; }
-  .note { color: var(--warn); font-size: 12px; white-space: pre-wrap; }
-  .screen { position: relative; background: #000; aspect-ratio: 375 / 667; cursor: crosshair; user-select: none; -webkit-user-select: none; touch-action: none; border-radius: 6px; overflow: hidden; }
-  .screen img { width: 100%; height: 100%; display: block; pointer-events: none; -webkit-user-drag: none; user-select: none; -webkit-user-select: none; }
-  .screen canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
-  .screen .typing { position: absolute; left: 6px; top: 6px; background: rgba(0,0,0,.6); color: #fff; font-size: 11px; padding: 2px 6px; border-radius: 4px; display: none; }
-  .tile.locked .screen { opacity: .4; cursor: not-allowed; }
-  .tile.offline .screen img { opacity: .3; }
-  .lock { color: var(--warn); font-size: 12px; }
-  .row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
-  .row input[type=text] { flex: 1; min-width: 100px; }
-  .msg { font-size: 12px; color: var(--muted); min-height: 16px; }
-  .kbd { display: inline-block; border: 1px solid #555; border-radius: 4px; padding: 0 5px; font: 11px ui-monospace, monospace; color: #bbb; }
-  .chips { display: flex; flex-wrap: wrap; gap: 5px; }
-  .chips button { font-size: 12px; padding: 3px 8px; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
-  /* Focus view */
-  #focus { position: fixed; inset: 0; background: rgba(0,0,0,.88); display: none; z-index: 10; padding: 16px; overflow: auto; }
-  #focus.open { display: flex; gap: 16px; align-items: flex-start; justify-content: center; flex-wrap: wrap; }
-  #focus .tile { width: min(430px, 100%); }
-  #focus .side { width: 320px; max-width: 100%; background: var(--panel); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
-  #focus .side h3 { margin: 0; font-size: 15px; }
-  #focus .side h4 { margin: 6px 0 0; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
-  #focus .side .help { color: var(--muted); font-size: 12px; line-height: 1.7; }
-  #focus .phones { display: flex; flex-wrap: wrap; gap: 6px; }
-  .typemode { border: 1px solid #3a6aa6; border-radius: 6px; padding: 6px 8px; font-size: 12px; color: var(--muted); cursor: pointer; }
-  .typemode.on { background: #1d3350; color: var(--text); }
-
-  /* Modals */
-  .modal { position: fixed; inset: 0; background: rgba(0,0,0,.85); display: none; z-index: 10; padding: 24px; overflow: auto; }
-  .modal.open { display: block; }
-  .modal .box { max-width: 1000px; margin: 0 auto; background: var(--panel); border-radius: 10px; padding: 16px; }
-  .modal h2 { margin: 0; font-size: 18px; }
-  .modal h3 { margin: 16px 0 6px; font-size: 14px; color: var(--muted); }
-  table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
-  th { color: var(--muted); font-weight: normal; }
-  td.num, th.num { text-align: right; }
-  .tabs { display: flex; gap: 6px; margin-top: 10px; }
-  .log { font: 12px ui-monospace, monospace; color: #bbb; max-height: 260px; overflow: auto; white-space: pre; }
-  .hist { display: flex; align-items: flex-end; gap: 3px; height: 120px; border-bottom: 1px solid var(--line); padding-bottom: 2px; overflow-x: auto; }
-  .hist .col { flex: 1 0 14px; display: flex; flex-direction: column-reverse; min-width: 14px; height: 100%; }
-  .hist .seg { width: 100%; }
-  .hist-legend { display: flex; gap: 12px; font-size: 12px; color: var(--muted); margin-top: 6px; flex-wrap: wrap; }
-  .sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: middle; }
-  .health { color: var(--muted); font-size: 12px; }
-  .health .warn { color: var(--warn); }
-  @media (max-width: 800px) {
-    #grid { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; padding: 10px; }
-    #focus { padding: 8px; }
-    #focus .side { width: 100%; }
-    .modal { padding: 8px; }
+  /* Style: true-black flat (taste-skill seed 839288020). Elevation by lightness alone, colour only on data.
+     Face: a cool monitor ground (#0c0d0f, cards #15171a) and the lime on the warmup progress, the one thing every tile measures.
+     Signature: each phone carries its 14-day warmup strip; today is the lime cell. */
+  :root {
+    --ground: #0c0d0f; --surface: #15171a; --raised: #2a2a2a; --active: #222428;
+    --border: #1d1f23; --rule: #1a1c20; --control: #444444;
+    --text: #ffffff; --muted: #b4b4b4; --faint: #949494;
+    --accent: #c6f24e; --positive: #c6f24e; --negative: #e5484d; --warning: #e5a93b;
+    --chart-1: #c6f24e; --chart-2: #e6e6e6; --chart-3: #6b6b6b; --grid: #2b2b2b; --axis-ink: #949494; --ink: #ffffff; --chart-span: 0.12;
+    --pill-positive-bg: #222a10; --pill-positive-ink: #c6f24e;
+    --pill-negative-bg: #2c1a20; --pill-negative-ink: #f07a8c;
+    --pill-warning-bg: #2b2414; --pill-warning-ink: #e5a93b;
+    --pill-neutral-bg: #222222; --pill-neutral-ink: #ffffff;
+    --radius-card: 20px; --radius-inner: 12px; --radius-control: 999px;
+    --gap: 14px; --pad: 22px; --control-height: 36px; --sidebar: 210px; --topbar: 64px;
+    --fs-title: 20px; --fs-section: 16px; --fs-kpi: 24px; --fs-body: 14px; --fs-small: 12px;
+    --font: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
   }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--ground); color: var(--text); font: 400 var(--fs-body)/20px var(--font); -webkit-font-smoothing: antialiased; }
+  .num, td, input[type=number] { font-variant-numeric: tabular-nums; }
+  a { color: inherit; }
+  [hidden] { display: none !important; }
+  :focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+
+  /* ---------- shell: ruled T-frame. Sidebar 210 + 1px rule; canvas gutter 29px ---------- */
+  #side { position: fixed; inset: 0 auto 0 0; width: var(--sidebar); border-right: 1px solid var(--rule); display: flex; flex-direction: column; padding: 18px 12px; gap: 4px; background: var(--ground); z-index: 6; }
+  .brand { display: flex; align-items: center; gap: 10px; height: 28px; padding: 0 8px; margin-bottom: 22px; font-weight: 600; font-size: 16px; }
+  .brand svg { flex: none; }
+  .navlabel { color: var(--faint); font-size: var(--fs-small); padding: 14px 8px 6px; }
+  .nav { display: flex; align-items: center; gap: 10px; height: 32px; margin-bottom: 2px; padding: 0 8px; border-radius: 8px; color: #bbbbbb; text-decoration: none; cursor: pointer; background: none; border: 0; font: inherit; width: 100%; text-align: left; }
+  .nav:hover { color: var(--text); }
+  .nav.on { color: var(--text); }
+  .nav svg { flex: none; opacity: .9; }
+  .nav .count { margin-left: auto; font-size: var(--fs-small); color: var(--pill-negative-ink); background: var(--pill-negative-bg); border-radius: 999px; padding: 0 7px; line-height: 18px; }
+  .side-foot { margin-top: auto; color: var(--faint); font-size: var(--fs-small); padding: 0 8px; line-height: 18px; }
+
+  #top { position: fixed; top: 0; left: var(--sidebar); right: 0; height: var(--topbar); border-bottom: 1px solid var(--rule); display: flex; align-items: center; gap: 16px; padding: 0 29px; background: var(--ground); z-index: 5; }
+  #today { display: flex; align-items: center; gap: 18px; color: var(--muted); font-size: 13px; min-width: 0; }
+  #today b { color: var(--text); font-weight: 500; }
+  .meter { display: inline-block; width: 64px; height: 6px; border-radius: 999px; background: var(--raised); vertical-align: middle; margin: 0 6px; overflow: hidden; }
+  .meter i { display: block; height: 100%; background: var(--accent); border-radius: 999px; }
+  #top .sp { flex: 1; }
+  .who { display: flex; align-items: center; gap: 12px; align-self: stretch; padding-left: 20px; border-left: 1px solid var(--rule); color: var(--muted); }
+  .who b { color: var(--text); font-weight: 500; }
+  main { margin-left: var(--sidebar); padding: calc(var(--topbar) + 28px) 29px 48px; }
+
+  /* ---------- controls ---------- */
+  button, .btn { height: 32px; padding: 0 14px; border-radius: var(--radius-control); border: 1px solid var(--control); background: transparent; color: var(--text); font: 500 13px/1 var(--font); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap; text-decoration: none; transition: background-color .12s, border-color .12s, transform .08s; }
+  button:hover, .btn:hover { background: var(--active); }
+  button:active { transform: scale(.97); }
+  button.primary { background: var(--text); color: #000; border-color: var(--text); height: var(--control-height); }
+  button.primary:hover { background: #e6e6e6; }
+  button.quiet { border-color: transparent; color: var(--muted); }
+  button.quiet:hover { color: var(--text); }
+  button.danger { color: var(--pill-negative-ink); border-color: #4a2a32; }
+  button.icon { width: 32px; padding: 0; }
+  button.on { border-color: var(--text); background: var(--active); }
+  button:disabled { opacity: .5; cursor: default; }
+  input[type=text], input[type=number], input[type=date], input[type=password], input[type=time], select, textarea {
+    height: 32px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--control); background: var(--ground); color: var(--text); font: 400 13px/1 var(--font); }
+  textarea { height: auto; min-height: 72px; padding: 10px 12px; line-height: 20px; width: 100%; resize: vertical; }
+  input::placeholder, textarea::placeholder { color: var(--faint); }
+  select { padding-right: 8px; }
+  input[type=date] { color-scheme: dark; }
+  input[type=time] { color-scheme: dark; }
+  label.field { display: flex; flex-direction: column; gap: 8px; color: var(--muted); font-size: 13px; font-weight: 500; }
+  .switch { position: relative; display: inline-block; width: 30px; height: 18px; flex: none; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .switch i { position: absolute; inset: 0; border-radius: 999px; background: var(--raised); cursor: pointer; transition: background-color .12s; }
+  .switch i::after { content: ""; position: absolute; left: 2px; top: 2px; width: 14px; height: 14px; border-radius: 50%; background: #9a9a9a; transition: transform .12s, background-color .12s; }
+  .switch input:checked + i { background: #e6e6e6; }
+  .switch input:checked + i::after { transform: translateX(12px); background: #000; }
+
+  /* ---------- page title ---------- */
+  .titlerow { display: flex; align-items: flex-end; gap: 16px; margin-bottom: 22px; flex-wrap: wrap; }
+  .titlerow > div:first-child { flex: 1; min-width: 240px; }
+  h1, .vt { font-size: var(--fs-title); line-height: 28px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+  .finding { color: var(--muted); margin: 4px 0 0; font-size: 14px; }
+  .finding b { color: var(--text); font-weight: 500; }
+  h2 { font-size: var(--fs-section); font-weight: 500; margin: 0; line-height: 24px; }
+
+  /* ---------- phone tiles. Grid: auto-fill of 260px minimum, 14px gap both ways ---------- */
+  #grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--gap); align-items: start; }
+  .tile { background: var(--surface); border-radius: var(--radius-card); padding: 14px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  .t-head { display: flex; align-items: center; gap: 8px; min-height: 24px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--negative); flex: none; }
+  .dot.on { background: var(--positive); }
+  .dot.starting { background: var(--warning); }
+  .t-name { font-weight: 500; white-space: nowrap; cursor: pointer; }
+  .t-handle { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .t-meta { margin-left: auto; color: var(--faint); font-size: var(--fs-small); white-space: nowrap; }
+  .t-head button.icon { height: 28px; width: 28px; border-color: transparent; color: var(--muted); }
+  .note { color: var(--warning); font-size: 13px; white-space: pre-wrap; margin-top: -4px; }
+  .alert { display: flex; align-items: flex-start; gap: 10px; background: var(--pill-negative-bg); color: var(--pill-negative-ink); border-radius: var(--radius-inner); padding: 10px 12px; font-size: 13px; line-height: 18px; }
+  .alert span { flex: 1; }
+  .alert button { height: 26px; padding: 0 10px; border-color: #5a2f39; color: var(--pill-negative-ink); }
+
+  .screen { position: relative; background: #000; aspect-ratio: 375 / 667; cursor: crosshair; user-select: none; -webkit-user-select: none; touch-action: none; border-radius: var(--radius-inner); overflow: hidden; }
+  .screen img { width: 100%; height: 100%; display: block; pointer-events: none; -webkit-user-drag: none; user-select: none; object-fit: cover; }
+  .screen canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  .screen .typing { position: absolute; left: 8px; top: 8px; background: #000; color: #fff; font-size: var(--fs-small); padding: 2px 8px; border-radius: 999px; display: none; }
+  .screen .paused { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; color: var(--faint); font-size: 13px; }
+  .screen.is-paused .paused { display: flex; }
+  .screen .offline { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; text-align: center; padding: 20px; color: var(--muted); font-size: 13px; line-height: 18px; }
+  .tile.offline .screen .offline { display: flex; }
+  .tile.offline .screen img { opacity: .15; }
+  .tile.locked .screen { cursor: not-allowed; }
+  .tile.locked .screen img { opacity: .45; }
+  .claude { position: absolute; left: 8px; right: 8px; bottom: 8px; display: none; align-items: center; gap: 8px; background: #000; border-radius: 999px; padding: 4px 4px 4px 12px; font-size: var(--fs-small); color: var(--text); }
+  .claude .pulse { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex: none; animation: pulse 1.6s ease-in-out infinite; }
+  .claude span { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .claude button { height: 24px; padding: 0 10px; font-size: var(--fs-small); background: var(--text); color: #000; border-color: var(--text); }
+  .tile.claude-on .claude { display: flex; }
+  @keyframes pulse { 50% { opacity: .25; } }
+
+  /* warmup block: the 14-day strip and today's three tracks */
+  .wu { display: flex; flex-direction: column; gap: 10px; }
+  .wu-head { display: flex; align-items: baseline; gap: 8px; font-size: 13px; color: var(--muted); }
+  .wu-head b { color: var(--text); font-weight: 500; }
+  .wu-head .r { margin-left: auto; }
+  .pill { display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 999px; font-size: var(--fs-small); font-weight: 500; flex: none; white-space: nowrap; }
+  .pill.pos { background: var(--pill-positive-bg); color: var(--pill-positive-ink); }
+  .pill.warn { background: var(--pill-warning-bg); color: var(--pill-warning-ink); }
+  .pill.neg { background: var(--pill-negative-bg); color: var(--pill-negative-ink); }
+  .pill.neu { background: var(--pill-neutral-bg); color: var(--pill-neutral-ink); }
+  .strip { display: grid; grid-template-columns: repeat(14, 1fr); gap: 3px; }
+  .strip i { height: 8px; border-radius: 2px; background: var(--raised); }
+  .strip i.past { background: #8a8a8a; }
+  .strip i.today { background: var(--accent); }
+  .track { display: grid; grid-template-columns: 84px 1fr auto; align-items: center; gap: 10px; font-size: var(--fs-small); color: var(--muted); }
+  .track > span:first-child { white-space: nowrap; }
+  /* narrow tiles (tablet, phone): label and figure on one line, the bar under them; app buttons live in the focus view */
+  .tile { container-type: inline-size; }
+  @container (max-width: 250px) {
+    .track { grid-template-columns: 1fr auto; row-gap: 5px; }
+    .track .bar { grid-column: 1 / -1; grid-row: 2; }
+    .track .num { min-width: 0; }
+    .ctrl .app, .ctrl .sec { display: none; }
+    .t-handle { display: none; }
+    .wu-head { flex-wrap: wrap; }
+  }
+  .track .bar { height: 6px; background: var(--raised); border-radius: 999px; overflow: hidden; }
+  .track .bar i { display: block; height: 100%; width: 0; background: var(--accent); border-radius: 999px; transition: width .4s ease; }
+  .track.full .bar i { background: #e6e6e6; }
+  .track .num { color: var(--text); min-width: 64px; text-align: right; }
+  .track .num em { font-style: normal; color: var(--faint); }
+  .wu-empty { color: var(--faint); font-size: 13px; }
+
+  .ctrl { display: flex; flex-direction: column; gap: 8px; }
+  .ctrl .row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .ctrl input[type=text] { flex: 1; min-width: 80px; }
+  .ctrl input.sec { width: 52px; padding: 0 8px; text-align: right; }
+  .msg { font-size: var(--fs-small); color: var(--muted); min-height: 16px; }
+  .lock { color: var(--warning); }
+  .kbd { display: inline-block; border: 1px solid var(--control); border-radius: 6px; padding: 0 6px; font-size: 11px; line-height: 18px; color: var(--muted); }
+
+  /* ---------- focus ---------- */
+  #focus { position: fixed; inset: 0; background: var(--ground); display: none; z-index: 20; padding: 24px 29px; overflow: auto; }
+  #focus.open { display: flex; gap: var(--gap); align-items: flex-start; justify-content: center; flex-wrap: wrap; }
+  #focus .tile { width: min(440px, 100%); }
+  #focus .side { width: 340px; max-width: 100%; background: var(--surface); border-radius: var(--radius-card); padding: var(--pad); display: flex; flex-direction: column; gap: 16px; }
+  #focus .side h3 { margin: 0; font-size: 13px; font-weight: 500; color: var(--muted); }
+  #focus .phones { display: flex; flex-wrap: wrap; gap: 6px; }
+  #focus .help { color: var(--muted); font-size: var(--fs-small); line-height: 24px; }
+  .typemode { border-radius: var(--radius-inner); padding: 10px 12px; font-size: 13px; color: var(--muted); cursor: pointer; background: var(--raised); display: flex; align-items: center; gap: 8px; }
+  .typemode.on { background: var(--text); color: #000; }
+  .typemode.on .kbd { color: #000; border-color: #000; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chips button { max-width: 100%; overflow: hidden; text-overflow: ellipsis; display: block; line-height: 30px; }
+  .health { color: var(--muted); font-size: var(--fs-small); line-height: 18px; }
+  .health .warn { color: var(--warning); }
+
+  /* ---------- views: panels on the ground ---------- */
+  .panel { background: var(--surface); border-radius: var(--radius-card); padding: var(--pad); }
+  .panel + .panel { margin-top: var(--gap); }
+  .p-head { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+  .p-head .r { margin-left: auto; color: var(--faint); font-size: var(--fs-small); }
+  .sec { display: grid; grid-template-columns: minmax(200px, 300px) 1fr; gap: 28px; padding: 26px 0; border-top: 1px solid var(--rule); }
+  .sec:first-of-type { border-top: 0; padding-top: 0; }
+  .sec .lead h2 { margin-bottom: 4px; }
+  .sec .lead p { color: var(--muted); margin: 0; font-size: 13px; line-height: 20px; }
+  .sec > * { min-width: 0; }
+  .fields { display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-end; }
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; font-weight: 400; color: var(--faint); font-size: var(--fs-small); padding: 0 10px 10px; white-space: nowrap; }
+  td { padding: 10px; border-top: 1px solid var(--rule); vertical-align: middle; }
+  th:first-child, td:first-child { padding-left: 0; }
+  th:last-child, td:last-child { padding-right: 0; }
+  td.num, th.num { text-align: right; }
+  td .sub { display: block; color: var(--faint); font-size: var(--fs-small); line-height: 18px; }
+  td input[type=text] { width: 100%; min-width: 120px; }
+  td input[type=number] { width: 64px; text-align: right; padding: 0 8px; }
+  .tablewrap { overflow-x: auto; }
+  .stamp { color: var(--faint); font-size: var(--fs-small); }
+  .save-row { display: flex; align-items: center; gap: 12px; margin-top: 16px; }
+  .chart { min-height: 200px; }
+  .log { font-size: 13px; line-height: 20px; color: var(--muted); max-height: 280px; overflow: auto; }
+  .log div { display: grid; grid-template-columns: 140px 90px 1fr; gap: 10px; border-top: 1px solid var(--rule); padding: 4px 0; }
+  .log div span:first-child { color: var(--faint); }
+  .empty { border: 1px dashed var(--control); border-radius: var(--radius-inner); padding: 10px 14px; color: var(--muted); font-size: 13px; }
+  .grid2 { display: grid; grid-template-columns: 2fr 1fr; gap: var(--gap); align-items: start; }
+  .grid2 > .panel, .grid2 > .col > .panel:first-child { margin-top: 0; }
+
+  #menuBtn { display: none; }
+  @media (max-width: 900px) {
+    :root { --sidebar: 0px; --topbar: 52px; }
+    #side { width: 100%; inset: 52px 0 auto 0; height: auto; display: none; border-right: 0; border-bottom: 1px solid var(--rule); padding: 8px 16px 16px; }
+    #side.open { display: flex; }
+    #side .brand { display: none; }
+    #menuBtn { display: inline-flex; }
+    #top { left: 0; padding: 0 16px; gap: 10px; }
+    #today { display: none; }
+    .who span { display: none; }
+    .who { padding-left: 12px; }
+    main { padding: calc(var(--topbar) + 20px) 16px 40px; }
+    #grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+    .tile { padding: 10px; border-radius: 16px; }
+    .sec { grid-template-columns: 1fr; gap: 14px; }
+    .grid2 { grid-template-columns: 1fr; }
+    #focus { padding: 12px 16px; }
+    #focus .side { width: 100%; }
+    .log div { grid-template-columns: 1fr; gap: 0; }
+    .hide-s { display: none; }
+  }
+  @media (max-width: 480px) {
+    #grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .titlerow label, #stopAll { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 </style>
 </head>
 <body>
-<div id="bar">
-  <b>phone-lab</b>
-  <span id="who" style="color:var(--muted);font-size:13px"></span>
-  <span id="me"></span>
-  <span class="sp"></span>
-  <label>Stream <select id="quality" title="Light for slow connections, Smooth for fast ones. The phone in focus is always smooth.">
-    <option value="light">Light</option><option value="normal" selected>Normal</option><option value="smooth">Smooth</option></select></label>
-  <label>Auto all <input type="number" id="allSec" min="3" max="60" value="8" style="width:56px" title="seconds per reel"></label>
-  <button id="autoAll" title="Start auto-scroll on every phone that is ready">Start</button>
-  <button id="stopAll" title="Stop auto-scroll everywhere">Stop</button>
-  <button id="settingsBtn" style="display:none">Snippets &amp; notes</button>
-  <button id="usersBtn" style="display:none">Users</button>
-  <button id="insightsBtn" style="display:none">Insights</button>
-  <a href="/logout"><button>Sign out</button></a>
-</div>
-<div id="grid"></div>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-phones" viewBox="0 0 16 16"><rect x="4" y="1.5" width="8" height="13" rx="1.8" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M7 12.2h2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+  <symbol id="i-warmup" viewBox="0 0 16 16"><path d="M2 12.5c2.2 0 2.2-3 4.4-3s2.2 3 4.4 3 2.2-6 3.2-9" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-insights" viewBox="0 0 16 16"><path d="M3 13V8M8 13V3M13 13V6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+  <symbol id="i-team" viewBox="0 0 16 16"><circle cx="6" cy="5.5" r="2.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M1.8 13.5c.6-2.4 2.2-3.6 4.2-3.6s3.6 1.2 4.2 3.6M10.5 3.2a2.5 2.5 0 0 1 0 4.6M12.2 10.2c1 .6 1.7 1.7 2 3.3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+  <symbol id="i-snippets" viewBox="0 0 16 16"><path d="M3 4h10M3 8h10M3 12h6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+  <symbol id="i-expand" viewBox="0 0 16 16"><path d="M9.5 2.5h4v4M6.5 13.5h-4v-4M13.5 2.5 9.2 6.8M2.5 13.5l4.3-4.3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-home" viewBox="0 0 16 16"><path d="M2.5 7.5 8 3l5.5 4.5M4 6.5V13h8V6.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-back" viewBox="0 0 16 16"><path d="M10 3 5 8l5 5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-shot" viewBox="0 0 16 16"><rect x="1.8" y="4.5" width="12.4" height="8.8" rx="1.8" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="8" cy="8.9" r="2.4" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M5.6 4.5 6.6 2.8h2.8l1 1.7" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 16 16"><path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+</svg>
 
-<div id="focus">
+<nav id="side" aria-label="Main">
+  <div class="brand"><svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><rect x="5.5" y="1.5" width="11" height="19" rx="3" fill="none" stroke="#fff" stroke-width="1.6"/><rect x="8" y="6" width="6" height="9" rx="1" fill="#c6f24e"/></svg>phone-lab</div>
+  <a class="nav on" href="#phones" data-view="phones"><svg width="16" height="16"><use href="#i-phones"/></svg>Phones<span class="count" id="alertCount" hidden></span></a>
+  <div class="navlabel admin-only" hidden>Manage</div>
+  <a class="nav admin-only" href="#warmup" data-view="warmup" hidden><svg width="16" height="16"><use href="#i-warmup"/></svg>Warmup</a>
+  <a class="nav admin-only" href="#insights" data-view="insights" hidden><svg width="16" height="16"><use href="#i-insights"/></svg>Insights</a>
+  <a class="nav admin-only" href="#team" data-view="team" hidden><svg width="16" height="16"><use href="#i-team"/></svg>Team</a>
+  <a class="nav admin-only" href="#snippets" data-view="snippets" hidden><svg width="16" height="16"><use href="#i-snippets"/></svg>Snippets &amp; notes</a>
+  <div class="side-foot" id="sideFoot"></div>
+</nav>
+
+<header id="top">
+  <button class="icon quiet" id="menuBtn" aria-label="Menu"><svg width="16" height="16"><use href="#i-menu"/></svg></button>
+  <div id="today" aria-live="polite"></div>
+  <span class="sp"></span>
+  <label class="hide-s" style="color:var(--muted);font-size:13px">Stream
+    <select id="quality" title="Light for slow connections, Smooth for fast ones. The phone in focus always streams smooth.">
+      <option value="light">Light</option><option value="normal" selected>Normal</option><option value="smooth">Smooth</option></select></label>
+  <div class="who"><span>Signed in as</span><b id="who"></b><a class="btn quiet" href="/logout">Sign out</a></div>
+</header>
+
+<main>
+  <!-- Phones -->
+  <section id="v-phones" data-v="phones">
+    <div class="titlerow">
+      <div><h1 class="vt">Phones</h1><p class="finding" id="finding">Loading phones…</p></div>
+      <label style="color:var(--muted);font-size:13px">Seconds per reel <input type="number" id="allSec" min="3" max="60" value="8" style="width:56px;text-align:right;margin-left:6px"></label>
+      <button id="autoAll" title="Start auto-scroll on every phone that is ready and free">Auto-scroll all</button>
+      <button id="stopAll" class="quiet" title="Stop auto-scroll on every phone">Stop all</button>
+    </div>
+    <div id="grid"></div>
+  </section>
+
+  <!-- Warmup -->
+  <section id="v-warmup" data-v="warmup" hidden>
+    <div class="titlerow">
+      <div><h1 class="vt">Warmup</h1><p class="finding" id="wuFinding"></p></div>
+      <span class="stamp" id="wuStamp"></span>
+    </div>
+    <div class="panel">
+      <div class="p-head"><h2>Phones</h2><span class="r">Claude only scrolls. Likes and comments stay with the VA.</span></div>
+      <div class="tablewrap"><table id="wuTable"><thead><tr><th>Phone</th><th>Start date</th><th>Niche</th><th>Day</th><th class="num">Claude today</th><th class="num">Cost today</th><th>Today's sessions</th><th>Paused</th><th></th></tr></thead><tbody></tbody></table></div>
+    </div>
+    <div class="panel">
+      <div class="sec">
+        <div class="lead"><h2>Session window</h2><p>Claude's sessions start at random times inside this window, at least 90 minutes apart.</p></div>
+        <div>
+          <div class="fields">
+            <label class="field">From <input type="time" id="wFrom"></label>
+            <label class="field">Until <input type="time" id="wTo"></label>
+            <button id="wSave" class="primary">Save window</button>
+            <span class="stamp" id="wMsg"></span>
+          </div>
+          <p class="stamp" id="wKey" style="margin:14px 0 0"></p>
+        </div>
+      </div>
+      <div class="sec">
+        <div class="lead"><h2>14-day plan</h2><p>One row per warmup day. Claude minutes are split over the sessions; likes and comments are the VA's daily target on that phone. A post is due on the days marked.</p></div>
+        <div>
+          <div class="tablewrap"><table id="tplTable"><thead><tr><th>Day</th><th class="num">Claude min</th><th class="num">Sessions</th><th class="num">Likes</th><th class="num">Comments</th><th>Post due</th></tr></thead><tbody></tbody></table></div>
+          <div class="save-row"><button id="tplSave" class="primary">Save plan</button><span class="stamp" id="tplMsg"></span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Insights -->
+  <section id="v-insights" data-v="insights" hidden>
+    <div class="titlerow">
+      <div><h1 class="vt">Insights</h1><p class="finding" id="insFinding"></p></div>
+      <div class="chips" id="insRange"><button class="on" data-range="today">Today</button><button data-range="week">7 days</button><button data-range="all">All time</button></div>
+      <a class="btn" href="/insights.csv">Export CSV</a>
+    </div>
+    <div class="grid2">
+      <div class="col">
+        <div class="panel"><div class="p-head"><h2>Time per person and phone</h2></div>
+          <div class="tablewrap"><table id="insTable"><thead><tr><th>Person</th><th>Phone</th><th class="num">Minutes</th><th class="num">Sessions</th><th class="num">Actions</th><th class="num">Comments</th><th class="num">Likes</th><th class="num">Last active</th></tr></thead><tbody></tbody></table></div></div>
+        <div class="panel"><div class="p-head"><h2>Minutes worked per day</h2><span class="r">last 30 days, all people</span></div><div class="chart" id="insChart"></div></div>
+      </div>
+      <div class="panel"><div class="p-head"><h2>Recent events</h2></div><div class="log" id="insLog" style="max-height:560px"></div></div>
+    </div>
+  </section>
+
+  <!-- Team -->
+  <section id="v-team" data-v="team" hidden>
+    <div class="titlerow"><div><h1 class="vt">Team</h1><p class="finding" id="teamFinding"></p></div></div>
+    <div class="grid2">
+    <div class="panel">
+      <div class="tablewrap"><table id="usersTable"><thead><tr><th>Person</th><th>Phones</th><th class="num">Today</th><th class="num">Comments today</th><th class="num">Last active</th><th></th></tr></thead><tbody></tbody></table></div>
+    </div>
+    <div class="panel">
+      <div>
+        <div class="lead" style="margin-bottom:20px"><h2>Add or update a person</h2><p id="uHint" class="stamp" style="margin:4px 0 0;font-size:13px">Leave the password empty to keep the current one.</p></div>
+        <div>
+          <div class="fields">
+            <label class="field">Username <input type="text" id="uName" placeholder="e.g. maria" autocomplete="off" style="width:150px"></label>
+            <label class="field">Password <input type="password" id="uPw" placeholder="at least 10 characters" autocomplete="new-password" style="width:190px"></label>
+            <label class="field">Comments per day <input type="number" id="uTexts" min="0" style="width:90px"></label>
+            <label class="field">Minutes per day <input type="number" id="uMinutes" min="0" style="width:90px"></label>
+          </div>
+          <div class="fields" style="margin-top:16px;align-items:center">
+            <label style="display:flex;gap:8px;align-items:center;color:var(--muted)"><span class="switch"><input type="checkbox" id="uAdmin"><i></i></span>Admin</label>
+            <span id="uPhones" class="chips"></span>
+          </div>
+          <div class="save-row"><button id="uSave" class="primary">Save person</button><span class="stamp" id="uMsg"></span></div>
+        </div>
+      </div>
+    </div>
+    </div>
+  </section>
+
+  <!-- Snippets & notes -->
+  <section id="v-snippets" data-v="snippets" hidden>
+    <div class="titlerow"><div><h1 class="vt">Snippets &amp; notes</h1><p class="finding">Snippets are one tap in the focus view. Labels and notes show on every tile.</p></div></div>
+    <div class="panel">
+      <div class="sec"><div class="lead"><h2>Every phone</h2><p>One snippet per line, shown on all phones.</p></div><div><textarea id="sGlobal"></textarea></div></div>
+      <div id="sPhones"></div>
+      <div class="save-row"><button id="sSave" class="primary">Save snippets and notes</button><span class="stamp" id="sMsg"></span></div>
+    </div>
+  </section>
+</main>
+
+<div id="focus" role="dialog" aria-label="Phone in focus">
   <div id="focusTile"></div>
   <div class="side">
-    <h3>Focus</h3>
     <div class="phones" id="focusPhones"></div>
-    <div class="typemode" id="typemode" title="Press T to toggle. When on, everything you type goes straight to the phone, including Backspace and Enter.">Direct typing: off <span class="kbd">T</span></div>
-    <h4>Snippets</h4>
-    <div class="chips" id="focusSnippets"><span style="color:var(--muted);font-size:12px">none yet</span></div>
-    <h4>Shortcuts</h4>
-    <div class="help">
-      <span class="kbd">Click</span> tap &nbsp; <span class="kbd">Shift+Click</span> double tap (like) &nbsp; <span class="kbd">Right-click</span> long press<br>
-      <span class="kbd">Drag</span> swipe along the mouse path &nbsp; <span class="kbd">B</span> back (edge swipe)<br>
-      <span class="kbd">H</span> home &nbsp; <span class="kbd">I</span> Instagram &nbsp; <span class="kbd">A</span> auto-scroll &nbsp; <span class="kbd">S</span> save screenshot<br>
-      <span class="kbd">←</span> <span class="kbd">→</span> previous / next phone &nbsp; <span class="kbd">Esc</span> close
-    </div>
+    <div class="typemode" id="typemode" title="Press T to toggle. While on, everything you type goes straight to the phone, Backspace and Enter included.">Direct typing is off <span class="kbd">T</span></div>
+    <div><h3>Snippets</h3><div class="chips" id="focusSnippets" style="margin-top:8px"></div></div>
+    <div><h3>Shortcuts</h3><div class="help">
+      <span class="kbd">Click</span> tap · <span class="kbd">Shift+Click</span> double tap (like) · <span class="kbd">Right-click</span> long press<br>
+      <span class="kbd">Drag</span> swipe along the mouse path · <span class="kbd">B</span> back<br>
+      <span class="kbd">H</span> home · <span class="kbd">I</span> Instagram · <span class="kbd">A</span> auto-scroll · <span class="kbd">S</span> screenshot<br>
+      <span class="kbd">←</span> <span class="kbd">→</span> previous or next phone · <span class="kbd">Esc</span> close</div></div>
     <div class="health" id="focusHealth"></div>
     <button id="focusClose">Close</button>
   </div>
 </div>
 
-<div id="users" class="modal"><div class="box">
-  <div style="display:flex;align-items:center;gap:10px"><h2 style="flex:1">Users</h2><button id="usersClose">Close</button></div>
-  <table id="usersTable"><thead><tr><th>User</th><th>Role</th><th>Phones</th><th>Daily target</th><th></th></tr></thead><tbody></tbody></table>
-  <h3>Add or update a user</h3>
-  <div class="row" style="gap:8px">
-    <input type="text" id="uName" placeholder="username" style="width:130px">
-    <input type="text" id="uPw" placeholder="password (min. 10)" style="width:170px">
-    <label><input type="checkbox" id="uAdmin"> admin</label>
-    <span id="uPhones"></span>
-  </div>
-  <div class="row" style="gap:8px;margin-top:8px">
-    <label>Daily target: <input type="number" id="uTexts" min="0" placeholder="comments" style="width:90px"> comments</label>
-    <label><input type="number" id="uMinutes" min="0" placeholder="minutes" style="width:90px"> minutes</label>
-    <button id="uSave" class="primary">Save</button>
-  </div>
-  <div class="msg" id="uMsg"></div>
-</div></div>
-
-<div id="settings" class="modal"><div class="box">
-  <div style="display:flex;align-items:center;gap:10px"><h2 style="flex:1">Snippets &amp; notes</h2><button id="settingsClose">Close</button></div>
-  <h3>Global snippets (one per line, shown on every phone)</h3>
-  <textarea id="sGlobal"></textarea>
-  <div id="sPhones"></div>
-  <div class="row" style="margin-top:10px"><button id="sSave" class="primary">Save</button><span class="msg" id="sMsg"></span></div>
-</div></div>
-
-<div id="insights" class="modal"><div class="box">
-  <div style="display:flex;align-items:center;gap:10px"><h2 style="flex:1">Insights</h2><a href="/insights.csv"><button>Export CSV</button></a><button id="insightsClose">Close</button></div>
-  <div class="tabs"><button class="on" data-range="today">Today</button><button data-range="week">7 days</button><button data-range="all">All time</button></div>
-  <h3>Time per user and phone</h3>
-  <table id="insTable"><thead><tr><th>User</th><th>Phone</th><th class="num">Minutes</th><th class="num">Sessions</th><th class="num">Actions</th><th class="num">Comments</th><th class="num">Likes</th><th>Last active</th></tr></thead><tbody></tbody></table>
-  <h3>Minutes per day, last 30 days</h3>
-  <div class="hist" id="insHist"></div><div class="hist-legend" id="insLegend"></div>
-  <h3>Phones</h3>
-  <div id="insPhones" style="font-size:13px"></div>
-  <h3>Recent events</h3>
-  <div class="log" id="insLog"></div>
-</div></div>
-
+<script src="/charts.js"></script>
 <script>
 // ---------- helpers ----------
 const SWIPE_GAIN = 2.5;             // short drag on the tile becomes a long swipe on the phone
 const AUTO_MAX_MIN = 20;            // auto-scroll stops by itself after this many minutes
-const state = { devices: [], user: null, admin: false, focusId: null, auto: {}, settings: { snippets: { global: [], phone: {} }, notes: {}, labels: {}, targets: {}, apps: ['Instagram'] }, typing: false };
+const state = { devices: [], user: null, admin: false, focusId: null, auto: {}, view: 'phones', typing: false,
+  settings: { snippets: { global: [], phone: {} }, notes: {}, labels: {}, targets: {}, apps: ['Instagram'] } };
 const $ = (s, el = document) => el.querySelector(s);
+const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const post = (id, action, data) => fetch(`/cmd/${id}/${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data || {}) })
-  .then(r => r.json()).then(j => { if (!j.ok) note(id, 'Error: ' + j.error); return j; }).catch(() => note(id, 'Error: no connection'));
-const note = (id, t) => document.querySelectorAll(`[data-id="${id}"] .msg`).forEach(m => { m.textContent = t; setTimeout(() => m.textContent === t && (m.textContent = ''), 3000); });
+const jpost = (url, data, method = 'POST') => fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data || {}) }).then(r => r.json()).catch(() => ({ ok: false, error: 'no connection' }));
+const post = (id, action, data) => jpost(`/cmd/${id}/${action}`, data).then(j => { if (!j.ok) note(id, 'Error: ' + j.error); return j; });
+const note = (id, t) => $$(`[data-id="${id}"] .msg`).forEach(m => { m.textContent = t; setTimeout(() => m.textContent === t && (m.textContent = ''), 3000); });
 const amplify = pts => { const s = pts[0], cl = v => Math.min(0.97, Math.max(0.03, v));
   return pts.map(p => ({ x: cl(s.x + (p.x - s.x) * SWIPE_GAIN), y: cl(s.y + (p.y - s.y) * SWIPE_GAIN), t: p.t })); };
-const fmtAgo = t => { if (!t) return ''; const m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'just now' : m < 60 ? m + ' min ago' : m < 1440 ? Math.round(m / 60) + ' h ago' : Math.round(m / 1440) + ' d ago'; };
+const fmtAgo = t => { if (!t) return '–'; const m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'just now' : m < 60 ? m + ' min ago' : m < 1440 ? Math.round(m / 60) + ' h ago' : Math.round(m / 1440) + ' d ago'; };
 const rnd = (a, b) => a + Math.random() * (b - a);
 const backSwipe = () => [{ x: 0.01, y: 0.5, t: 0 }, { x: 0.25, y: 0.5, t: 120 }, { x: 0.55, y: 0.5, t: 260 }];
+const icon = (id, s = 16) => `<svg width="${s}" height="${s}" aria-hidden="true"><use href="#i-${id}"/></svg>`;
+const round1 = v => Math.round(v * 10) / 10;
+const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 
-// ---------- one phone view (used in the grid and in focus) ----------
+// ---------- streams: only tiles on screen stream; everything pauses behind the focus view or another view ----------
+function wantStream(el) { const id = +el.dataset.id; const inFocus = el.closest('#focus'); return state.view === 'phones' && (inFocus ? true : state.focusId == null && el._visible) || (inFocus && state.focusId === id); }
+function syncStream(el) {
+  const img = $('img', el), scr = $('.screen', el), on = wantStream(el);
+  if (on && !img._live) { img._live = true; img.src = `/stream/${el.dataset.id}?${Date.now()}`; scr.classList.remove('is-paused'); }
+  if (!on && img._live) { img._live = false; img.removeAttribute('src'); scr.classList.add('is-paused'); }
+}
+const syncAll = () => $$('.tile').forEach(syncStream);
+const io = new IntersectionObserver(entries => entries.forEach(e => { e.target._visible = e.isIntersecting; syncStream(e.target); }), { rootMargin: '200px' });
+
+// ---------- one phone view (grid and focus) ----------
 function phoneView(d, big) {
-  const el = document.createElement('div');
+  const el = document.createElement('article');
   el.className = 'tile'; el.dataset.id = d.id;
   const apps = state.settings.apps || ['Instagram'];
   el.innerHTML = `
-    <div class="head"><span class="dot"></span><b>${esc(d.name)}</b><span class="label"></span><span class="st">…</span>${big ? '' : '<button class="open small" title="Open large">⤢</button>'}</div>
-    <div class="note"></div>
-    <div class="screen"><img src="/stream/${d.id}" alt="" draggable="false"><canvas></canvas><span class="typing">typing…</span></div>
-    <div class="row"><input type="text" placeholder="Type text, Enter sends" title="Shift+Click on the screen = double tap"><button class="send">Send</button></div>
-    <div class="row"><button class="home" title="Home (H)">Home</button><button class="back" title="Back: swipe from the left edge (B)">Back</button>
-      ${apps.map(a => `<button class="app" data-app="${esc(a)}" title="Open ${esc(a)}">${esc(a)}</button>`).join('')}
-      <button class="shot" title="Save a screenshot (S)">📷</button>
-      <button class="auto" title="Auto-scroll: swipes to the next reel every N seconds while this page is open. Any click on the screen stops it. (A)">Auto</button>
-      <input type="number" class="sec" min="3" max="60" value="8" title="Seconds per reel" style="width:56px"></div>
-    <div class="msg"></div>`;
+    <div class="t-head"><span class="dot"></span><span class="t-name">${esc(d.name)}</span><span class="t-handle"></span><span class="t-meta num"></span>${big ? '' : `<button class="icon open" title="Open large" aria-label="Open ${esc(d.name)} large">${icon('expand')}</button>`}</div>
+    <div class="screen"><img alt="Live screen of ${esc(d.name)}" draggable="false"><canvas></canvas><span class="typing">Typing to phone</span>
+      <div class="paused">Stream paused</div><div class="offline">Phone offline</div>
+      <div class="claude"><span class="pulse"></span><span class="ctext">Claude is scrolling</span><button class="cstop">Take over</button></div></div>
+    <div class="alert" hidden><span></span>${state.admin ? '<button class="clear">Clear</button>' : ''}</div>
+    <div class="note" hidden></div>
+    <div class="wu"></div>
+    <div class="ctrl">
+      <div class="row"><input type="text" placeholder="Type text, Enter sends" aria-label="Text for ${esc(d.name)}"><button class="send">Send</button></div>
+      <div class="row"><button class="icon home" title="Home (H)" aria-label="Home">${icon('home')}</button><button class="icon back" title="Back, swipe from the left edge (B)" aria-label="Back">${icon('back')}</button>
+        ${apps.map(a => `<button class="app" data-app="${esc(a)}" title="Open ${esc(a)}">${esc(a)}</button>`).join('')}
+        <button class="icon shot" title="Save a screenshot (S)" aria-label="Screenshot">${icon('shot')}</button>
+        <button class="auto" title="Auto-scroll: swipes to the next reel every N seconds while this page is open. Any click on the screen stops it. (A)">Auto</button>
+        <input type="number" class="sec" min="3" max="60" value="8" title="Seconds per reel" aria-label="Seconds per reel"></div>
+    </div>
+    <div class="msg" aria-live="polite"></div>`;
   const scr = $('.screen', el), img = $('img', el), inp = $('input[type=text]', el), cv = $('canvas', el);
   const norm = e => { const r = scr.getBoundingClientRect(); return { x: Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)), y: Math.min(1, Math.max(0, (e.clientY - r.top) / r.height)) }; };
 
-  // glowing trail: shows the swipe that is actually sent to the phone
+  // trail: shows the swipe that is actually sent to the phone
   let trail = [], trailAlpha = 0;
   const draw = () => {
     cv.width = scr.clientWidth; cv.height = scr.clientHeight;
@@ -205,23 +456,20 @@ function phoneView(d, big) {
     if (!trail.length || trailAlpha <= 0) return;
     const P = p => [p.x * cv.width, p.y * cv.height];
     c.globalAlpha = trailAlpha; c.lineCap = 'round'; c.lineJoin = 'round';
-    const stroke = (color, width, blur) => {
-      c.strokeStyle = color; c.fillStyle = color; c.lineWidth = width; c.shadowColor = color; c.shadowBlur = blur;
-      c.beginPath(); trail.forEach((p, i) => c[i ? 'lineTo' : 'moveTo'](...P(p))); c.stroke();
-      const l = trail[trail.length - 1]; c.beginPath(); c.arc(...P(l), width * 0.9, 0, 7); c.fill();
-    };
-    stroke('#0af', 14, 30); stroke('#fff', 5, 12);
+    c.strokeStyle = '#c6f24e'; c.fillStyle = '#c6f24e'; c.lineWidth = 6;
+    c.beginPath(); trail.forEach((p, i) => c[i ? 'lineTo' : 'moveTo'](...P(p))); c.stroke();
+    const l = trail[trail.length - 1]; c.beginPath(); c.arc(...P(l), 7, 0, 7); c.fill();
   };
-  const fade = () => { trailAlpha -= 0.03; draw(); if (trailAlpha > 0) requestAnimationFrame(fade); else trail = []; };
-  el.showTrail = p => { trail = p; trailAlpha = 1; draw(); setTimeout(fade, 250); };
+  const fade = () => { trailAlpha -= 0.05; draw(); if (trailAlpha > 0) requestAnimationFrame(fade); else trail = []; };
+  el.showTrail = p => { trail = p; trailAlpha = 1; draw(); setTimeout(fade, 200); };
 
-  // left button: click = tap, Shift+click or quick second click = double tap, drag = swipe; right button held = long press
+  // left button: click = tap, Shift+click or a quick second click = double tap, drag = swipe; right button held = long press
   let down = null, pathPts = [], lastTap = 0, pressTimer = null;
   scr.addEventListener('contextmenu', e => e.preventDefault());
   scr.addEventListener('dragstart', e => e.preventDefault());
   scr.addEventListener('pointerdown', e => {
     e.preventDefault(); stopAuto(d.id);
-    if (e.button === 2) { const p = norm(e); el.showTrail([p]); pressTimer = setTimeout(() => { pressTimer = null; post(d.id, 'press', { ...p, ms: 900 }); note(d.id, 'long press'); }, 150); return; }
+    if (e.button === 2) { const p = norm(e); el.showTrail([p]); pressTimer = setTimeout(() => { pressTimer = null; post(d.id, 'press', { ...p, ms: 900 }); note(d.id, 'Long press'); }, 150); return; }
     if (e.button !== 0) return;
     down = { ...norm(e), t: Date.now() }; pathPts = [{ ...down, t: 0 }]; scr.setPointerCapture(e.pointerId);
     trail = [down]; trailAlpha = 1; draw();
@@ -239,7 +487,7 @@ function phoneView(d, big) {
     const far = pathPts.some(p => Math.hypot((p.x - start.x) * scr.clientWidth, (p.y - start.y) * scr.clientHeight) > 12);
     if (far) { el.showTrail(amplify(pathPts)); post(d.id, 'swipe', { path: trail }); return; }
     el.showTrail([up]);
-    if (e.shiftKey || Date.now() - lastTap < 300) { lastTap = 0; post(d.id, 'doubletap', up); note(d.id, 'double tap'); return; }
+    if (e.shiftKey || Date.now() - lastTap < 300) { lastTap = 0; post(d.id, 'doubletap', up); note(d.id, 'Double tap'); return; }
     lastTap = Date.now(); post(d.id, 'tap', up);
   });
   scr.addEventListener('pointercancel', () => { down = null; fade(); });
@@ -249,31 +497,53 @@ function phoneView(d, big) {
   inp.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') send(); });
   $('.home', el).onclick = () => post(d.id, 'home');
   $('.back', el).onclick = () => { el.showTrail(backSwipe()); post(d.id, 'swipe', { path: backSwipe() }); };
-  el.querySelectorAll('.app').forEach(b => b.onclick = () => post(d.id, 'launch', { app: b.dataset.app }));
+  $$('.app', el).forEach(b => b.onclick = () => post(d.id, 'launch', { app: b.dataset.app }));
   $('.shot', el).onclick = () => saveShot(d, img);
   $('.auto', el).onclick = () => state.auto[d.id] ? stopAuto(d.id) : startAuto(d.id, +$('.sec', el).value);
-  if (!big) { $('.open', el).onclick = () => openFocus(d.id); $('b', el).style.cursor = 'pointer'; $('b', el).onclick = () => openFocus(d.id); }
-  img.onerror = () => { img.style.visibility = 'hidden'; setTimeout(() => img.src = `/stream/${d.id}?${Date.now()}`, 5000); };
+  $('.cstop', el).onclick = () => jpost(`/warmup/${d.id}/stop`).then(() => { note(d.id, 'Claude stopped, the phone is yours'); refresh(); });
+  if ($('.clear', el)) $('.clear', el).onclick = () => jpost(`/warmup/${d.id}/clear`).then(refresh);
+  if (!big) { $('.open', el).onclick = () => openFocus(d.id); $('.t-name', el).onclick = () => openFocus(d.id); }
+  img.onerror = () => { if (!img._live) return; img.style.visibility = 'hidden'; setTimeout(() => { if (img._live) img.src = `/stream/${d.id}?${Date.now()}`; }, 5000); };
   img.onload = () => img.style.visibility = '';
   el.decorate = () => {
-    $('.label', el).textContent = state.settings.labels[d.id] || '';
-    $('.note', el).textContent = state.settings.notes[d.id] || '';
-    $('.note', el).style.display = state.settings.notes[d.id] ? '' : 'none';
+    $('.t-handle', el).textContent = state.settings.labels[d.id] || '';
+    const n = state.settings.notes[d.id] || ''; $('.note', el).textContent = n; $('.note', el).hidden = !n;
   };
   el.decorate();
+  if (big) { el._visible = true; } else io.observe(el);
   return el;
 }
 
-// save the current frame of the stream as a PNG file
+// warmup block of a tile, from /devices
+function renderWarmup(el, d) {
+  const w = d.warmup, box = $('.wu', el);
+  if (!w || !w.day) {
+    const msg = w && w.start ? `Warmup starts ${esc(w.start)}` : 'No warmup set for this phone';
+    const html = `<div class="wu-empty">${msg}${state.admin ? ' · <a href="#warmup">Set up</a>' : ''}</div>`;
+    if (box._html !== html) { box.innerHTML = html; box._html = html; }
+    return;
+  }
+  const t = w.today || {}, done = w.done || {};
+  const cells = Array.from({ length: w.of }, (_, i) => `<i class="${i + 1 < w.day ? 'past' : i + 1 === w.day ? 'today' : ''}" title="Day ${i + 1}"></i>`).join('');
+  const track = (label, have, want, unit) => {
+    const ratio = want ? Math.min(1, have / want) : 0, full = want && have >= want;
+    return `<div class="track${full ? ' full' : ''}"><span>${label}</span><span class="bar"><i style="width:${(ratio * 100).toFixed(1)}%"></i></span><span class="num">${want ? `${have} <em>/ ${want}${unit}</em>` : '<em>none today</em>'}</span></div>`;
+  };
+  const status = w.paused ? '<span class="pill neu r">Paused</span>' : w.finished ? '<span class="pill pos r">Warmed up</span>' : t.post ? '<span class="pill warn r">Post due today</span>' : '';
+  const html = w.finished ? `<div class="wu-head"><b>Warmup finished</b><span>${w.of} days</span>${status}</div><div class="strip">${cells}</div>`
+    : `<div class="wu-head"><b>Day ${w.day}</b><span>of ${w.of}</span>${status}</div><div class="strip">${cells}</div>
+      ${track('Claude scroll', Math.round(done.scrollMin || 0), t.scroll, ' min')}${track('Likes', done.likes || 0, t.likes, '')}${track('Comments', done.comments || 0, t.comments, '')}`;
+  if (box._html !== html) { box.innerHTML = html; box._html = html; }
+}
+
 function saveShot(d, img) {
-  if (!img.naturalWidth) return note(d.id, 'no image yet');
+  if (!img.naturalWidth) return note(d.id, 'No image yet');
   const c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight; c.getContext('2d').drawImage(img, 0, 0);
   const a = document.createElement('a'); a.download = `${d.name.replace(/\s+/g, '-')}-${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}.png`; a.href = c.toDataURL('image/png'); a.click();
-  note(d.id, 'screenshot saved');
+  note(d.id, 'Screenshot saved');
 }
 
 // ---------- auto-scroll (only while the page is open; any manual action on that phone stops it) ----------
-// every swipe is a little different: start point, length, slight curve and speed vary like a thumb would
 function autoSwipe() {
   const x0 = rnd(0.35, 0.65), y0 = rnd(0.7, 0.85), len = rnd(0.5, 0.65), drift = rnd(-0.06, 0.06), bend = rnd(-0.04, 0.04), total = rnd(180, 320);
   const n = 5 + Math.floor(rnd(0, 4)), pts = [];
@@ -287,27 +557,27 @@ function startAuto(id, sec) {
   const tick = () => {
     if (document.hidden || Date.now() > end) return stopAuto(id);
     const p = autoSwipe();
-    document.querySelectorAll(`[data-id="${id}"]`).forEach(v => v.showTrail && v.showTrail(p));
-    post(id, 'swipe', { path: p });
+    $$(`[data-id="${id}"]`).forEach(v => v.showTrail && v.showTrail(p));
+    post(id, 'swipe', { path: p, auto: true });
   };
   state.auto[id] = setInterval(tick, sec * 1000);
-  document.querySelectorAll(`[data-id="${id}"] .auto`).forEach(b => { b.classList.add('on'); b.textContent = 'Auto on'; });
+  $$(`[data-id="${id}"] .auto`).forEach(b => { b.classList.add('on'); b.textContent = 'Auto on'; });
 }
 function stopAuto(id) {
   if (!state.auto[id]) return;
   clearInterval(state.auto[id]); delete state.auto[id];
-  document.querySelectorAll(`[data-id="${id}"] .auto`).forEach(b => { b.classList.remove('on'); b.textContent = 'Auto'; });
+  $$(`[data-id="${id}"] .auto`).forEach(b => { b.classList.remove('on'); b.textContent = 'Auto'; });
 }
 document.addEventListener('visibilitychange', () => document.hidden && Object.keys(state.auto).forEach(id => stopAuto(+id)));
-$('#autoAll').onclick = () => state.devices.filter(d => d.ready && !d.lockedBy).forEach(d => startAuto(d.id, +$('#allSec').value));
+$('#autoAll').onclick = () => state.devices.filter(d => d.ready && !d.lockedBy && !(d.warmup && d.warmup.claude)).forEach(d => startAuto(d.id, +$('#allSec').value));
 $('#stopAll').onclick = () => Object.keys(state.auto).forEach(id => stopAuto(+id));
 
 // ---------- focus view with direct typing ----------
 let typeBuf = '', typeTimer = null;
 function flushTyping() { if (state.focusId == null || !typeBuf) return; const t = typeBuf; typeBuf = ''; post(state.focusId, 'keys', { text: t }); }
 function setTyping(on) {
-  state.typing = on; const tm = $('#typemode'); tm.classList.toggle('on', on); tm.innerHTML = `Direct typing: ${on ? 'on' : 'off'} <span class="kbd">T</span>`;
-  document.querySelectorAll('#focusTile .typing').forEach(s => s.style.display = on ? '' : 'none');
+  state.typing = on; const tm = $('#typemode'); tm.classList.toggle('on', on); tm.innerHTML = `Direct typing is ${on ? 'on' : 'off'} <span class="kbd">T</span>`;
+  $$('#focusTile .typing').forEach(s => s.style.display = on ? 'block' : 'none');
 }
 function openFocus(id) {
   const d = state.devices.find(x => x.id === id); if (!d) return;
@@ -315,20 +585,17 @@ function openFocus(id) {
   flushTyping(); state.focusId = id;
   const holder = $('#focusTile'); holder.innerHTML = ''; holder.appendChild(phoneView(d, true));
   $('#focusPhones').innerHTML = state.devices.map(x => `<button data-f="${x.id}" class="${x.id === id ? 'on' : ''}">${esc(x.name)}</button>`).join('');
-  $('#focusPhones').querySelectorAll('button').forEach(b => b.onclick = () => openFocus(+b.dataset.f));
+  $$('#focusPhones button').forEach(b => b.onclick = () => openFocus(+b.dataset.f));
   const snips = [...(state.settings.snippets.global || []), ...((state.settings.snippets.phone || {})[id] || [])];
-  $('#focusSnippets').innerHTML = snips.length ? snips.map(s => `<button title="${esc(s)}">${esc(s)}</button>`).join('') : '<span style="color:var(--muted);font-size:12px">none yet</span>';
-  $('#focusSnippets').querySelectorAll('button').forEach((b, i) => b.onclick = () => { post(id, 'text', { text: snips[i] }); note(id, 'snippet sent'); });
-  $('#focus').classList.add('open'); setTyping(state.typing); refreshStatus();
-  // the phone in focus streams larger and faster, everything else uses the chosen stream level
-  post(id, 'quality', { level: 'focus' });
+  $('#focusSnippets').innerHTML = snips.length ? snips.map(s => `<button title="${esc(s)}">${esc(s)}</button>`).join('') : '<span class="stamp">No snippets yet</span>';
+  $$('#focusSnippets button').forEach((b, i) => b.onclick = () => { post(id, 'text', { text: snips[i] }); note(id, 'Snippet sent'); });
+  $('#focus').classList.add('open'); setTyping(state.typing); syncAll(); refreshStatus();
+  post(id, 'quality', { level: 'focus' });      // the phone in focus streams larger and faster
 }
-function closeFocus() { flushTyping(); if (state.focusId != null) post(state.focusId, 'quality', { level: streamLevel() }); state.focusId = null; $('#focus').classList.remove('open'); $('#focusTile').innerHTML = ''; }
+function closeFocus() { flushTyping(); if (state.focusId != null) post(state.focusId, 'quality', { level: streamLevel() }); state.focusId = null; $('#focus').classList.remove('open'); $('#focusTile').innerHTML = ''; syncAll(); }
 $('#focusClose').onclick = closeFocus;
-$('#focus').addEventListener('click', e => { if (e.target === $('#focus')) closeFocus(); });
 document.addEventListener('keydown', e => {
-  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-  const modal = $('.modal.open'); if (modal) { if (e.key === 'Escape') modal.classList.remove('open'); return; }
+  if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
   if (state.focusId == null) return;
   if (e.key === 'Escape') { if (state.typing) setTyping(false); else closeFocus(); return; }
   if (e.metaKey || e.ctrlKey || e.altKey) return;
@@ -351,80 +618,159 @@ document.addEventListener('keydown', e => {
 });
 $('#typemode').onclick = () => setTyping(!state.typing);
 
-// ---------- settings: snippets, notes, labels (admins) ----------
-async function loadSettings() { state.settings = await fetch('/settings').then(r => r.json()).catch(() => state.settings); document.querySelectorAll('.tile').forEach(t => t.decorate && t.decorate()); }
-async function openSettings() {
+// ---------- views (hash routes) ----------
+const VIEWS = ['phones', 'warmup', 'insights', 'team', 'snippets'];
+// one h1 in the document: the title of the visible view; the hidden views keep theirs as h2
+function retag(el, tag) {
+  if (el.tagName.toLowerCase() === tag) return;
+  const n = document.createElement(tag); for (const a of el.attributes) n.setAttribute(a.name, a.value);
+  n.innerHTML = el.innerHTML; el.replaceWith(n);
+}
+function showView(v) { $$('main > section').forEach(s => { s.hidden = s.dataset.v !== v; retag($('.vt', s), s.hidden ? 'h2' : 'h1'); }); }
+function route() {
+  let v = location.hash.slice(1); if (!VIEWS.includes(v) || (v !== 'phones' && !state.admin)) v = 'phones';
+  state.view = v;
+  showView(v);
+  $$('.nav').forEach(a => a.classList.toggle('on', a.dataset.view === v));
+  $('#side').classList.remove('open');
+  syncAll();
+  if (v === 'warmup') loadWarmup(); if (v === 'insights') loadInsights(); if (v === 'team') loadTeam(); if (v === 'snippets') loadSnippets();
+}
+window.addEventListener('hashchange', route);
+$('#menuBtn').onclick = () => $('#side').classList.toggle('open');
+
+// ---------- settings: snippets, notes, labels ----------
+async function loadSettings() { state.settings = await fetch('/settings').then(r => r.json()).catch(() => state.settings); $$('.tile').forEach(t => t.decorate && t.decorate()); }
+async function loadSnippets() {
   await loadSettings(); const st = state.settings;
   $('#sGlobal').value = (st.snippets.global || []).join('\n');
-  $('#sPhones').innerHTML = state.devices.map(d => `<h3>${esc(d.name)}</h3>
-    <div class="row"><label>Label <input type="text" class="sLabel" data-id="${d.id}" value="${esc(st.labels[d.id] || '')}" placeholder="e.g. account name" style="width:200px"></label>
-    <label style="flex:1">Note <input type="text" class="sNote" data-id="${d.id}" value="${esc(st.notes[d.id] || '')}" placeholder="shown on the tile" style="width:100%"></label></div>
-    <textarea class="sPhone" data-id="${d.id}" placeholder="snippets for this phone, one per line">${esc(((st.snippets.phone || {})[d.id] || []).join('\n'))}</textarea>`).join('');
-  $('#settings').classList.add('open');
+  $('#sPhones').innerHTML = state.devices.map(d => `<div class="sec"><div class="lead"><h2>${esc(d.name)}</h2><p>Label is the account shown on the tile; the note shows under it.</p></div><div>
+    <div class="fields" style="margin-bottom:14px"><label class="field">Label <input type="text" class="sLabel" data-id="${d.id}" value="${esc(st.labels[d.id] || '')}" placeholder="e.g. @account" style="width:200px"></label>
+    <label class="field" style="flex:1">Note <input type="text" class="sNote" data-id="${d.id}" value="${esc(st.notes[d.id] || '')}" placeholder="shown on the tile" style="width:100%"></label></div>
+    <textarea class="sPhone" data-id="${d.id}" placeholder="Snippets for this phone, one per line">${esc(((st.snippets.phone || {})[d.id] || []).join('\n'))}</textarea></div></div>`).join('');
 }
 $('#sSave').onclick = async () => {
   const lines = v => v.split('\n').map(s => s.trim()).filter(Boolean);
   const body = { snippets: { global: lines($('#sGlobal').value), phone: {} }, notes: {}, labels: {} };
-  document.querySelectorAll('.sPhone').forEach(t => { const l = lines(t.value); if (l.length) body.snippets.phone[t.dataset.id] = l; });
-  document.querySelectorAll('.sNote').forEach(t => { if (t.value.trim()) body.notes[t.dataset.id] = t.value.trim(); });
-  document.querySelectorAll('.sLabel').forEach(t => { if (t.value.trim()) body.labels[t.dataset.id] = t.value.trim(); });
-  const j = await fetch('/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(r => r.json());
-  $('#sMsg').textContent = j.ok ? 'Saved' : 'Error: ' + j.error; if (j.ok) loadSettings();
+  $$('.sPhone').forEach(t => { const l = lines(t.value); if (l.length) body.snippets.phone[t.dataset.id] = l; });
+  $$('.sNote').forEach(t => { if (t.value.trim()) body.notes[t.dataset.id] = t.value.trim(); });
+  $$('.sLabel').forEach(t => { if (t.value.trim()) body.labels[t.dataset.id] = t.value.trim(); });
+  const j = await jpost('/settings', body);
+  $('#sMsg').textContent = j.ok ? 'Saved ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Error: ' + j.error; if (j.ok) loadSettings();
 };
-$('#settingsBtn').onclick = openSettings;
-$('#settingsClose').onclick = () => $('#settings').classList.remove('open');
 
-// ---------- user management (admins) ----------
-async function openUsers() {
-  $('#users').classList.add('open'); $('#uMsg').textContent = '';
+// ---------- warmup (admins) ----------
+let wuCfg = null;
+async function loadWarmup() {
+  wuCfg = await fetch('/warmup').then(r => r.json());
+  $('#wFrom').value = wuCfg.window[0]; $('#wTo').value = wuCfg.window[1];
+  $('#wKey').innerHTML = wuCfg.hasKey ? `Reels are rated by ${esc(wuCfg.model)} for the niche; a warning on screen stops the session.`
+    : '<span class="lock">No ANTHROPIC_API_KEY in .env: Claude scrolls without rating the niche. Stop words still end a session.</span>';
+  $('#tplTable tbody').innerHTML = wuCfg.template.map((t, i) => `<tr data-i="${i}"><td>Day ${i + 1}</td>
+    <td class="num"><input type="number" min="0" max="240" data-k="scroll" value="${t.scroll}" aria-label="Claude minutes day ${i + 1}"></td>
+    <td class="num"><input type="number" min="1" max="6" data-k="sessions" value="${t.sessions}" aria-label="Sessions day ${i + 1}"></td>
+    <td class="num"><input type="number" min="0" max="200" data-k="likes" value="${t.likes}" aria-label="Likes day ${i + 1}"></td>
+    <td class="num"><input type="number" min="0" max="50" data-k="comments" value="${t.comments}" aria-label="Comments day ${i + 1}"></td>
+    <td><label class="switch"><input type="checkbox" data-k="post" ${t.post ? 'checked' : ''} aria-label="Post due day ${i + 1}"><i></i></label></td></tr>`).join('');
+  renderWarmupTable();
+}
+function renderWarmupTable() {
+  if (!wuCfg) return;
+  const rows = state.devices.map(d => {
+    const w = d.warmup || {}, t = w.today || {}, done = w.done || {};
+    const dayTxt = w.finished ? 'Finished' : w.day ? `${w.day} of ${w.of}` : w.start ? 'Not started' : '–';
+    const sess = (w.sessions || []).map(s => `<span class="pill ${s.status === 'done' ? 'pos' : s.status === 'running' ? 'warn' : s.status === 'planned' ? 'neu' : 'neg'}" title="${esc(s.status)}">${esc(s.at)} · ${s.minutes} min</span>`).join(' ') || '<span class="stamp">–</span>';
+    return `<tr data-id="${d.id}"><td style="min-width:${w.alert ? 210 : 110}px"><span style="white-space:nowrap">${esc(d.name)}</span><span class="sub">${esc(state.settings.labels[d.id] || 'no label')}</span>${w.alert ? `<span class="sub" style="color:var(--pill-negative-ink)">Stopped: ${esc(w.alert.reason)}</span>` : ''}</td>
+      <td><input type="date" class="wStart" value="${esc(w.start || '')}" aria-label="Start date ${esc(d.name)}"></td>
+      <td><input type="text" class="wNiche" value="${esc(w.niche || '')}" placeholder="e.g. Gaming, Cosplay" aria-label="Niche ${esc(d.name)}"></td>
+      <td class="num" style="white-space:nowrap">${dayTxt}</td>
+      <td class="num">${t.scroll ? `${Math.round(done.scrollMin || 0)} <span class="stamp">/ ${t.scroll} min</span>` : '<span class="stamp">–</span>'}</td>
+      <td class="num">${done.cost ? '$' + done.cost.toFixed(3) : '<span class="stamp">$0.000</span>'}</td>
+      <td style="min-width:150px">${sess}</td>
+      <td><label class="switch"><input type="checkbox" class="wPaused" ${w.paused ? 'checked' : ''} aria-label="Pause ${esc(d.name)}"><i></i></label></td>
+      <td style="text-align:right;white-space:nowrap">${w.alert ? '<button class="danger wClear">Clear alert</button> ' : ''}${w.claude ? '<button class="wStop">Stop</button>' : `<button class="wRun" ${d.ready ? '' : 'disabled title="Phone not ready"'}>Run 10 min</button>`}</td></tr>`;
+  });
+  const tb = $('#wuTable tbody');
+  if (document.activeElement && tb.contains(document.activeElement)) return;   // do not redraw under the cursor
+  tb.innerHTML = rows.join('');
+  $$('#wuTable tbody tr').forEach(tr => {
+    const id = +tr.dataset.id, save = b => jpost('/warmup', { phone: id, ...b }).then(() => { $('#wuStamp').textContent = 'Saved ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); refresh(); });
+    $('.wStart', tr).onchange = e => save({ start: e.target.value || null });
+    $('.wNiche', tr).onchange = e => save({ niche: e.target.value });
+    $('.wPaused', tr).onchange = e => save({ paused: e.target.checked });
+    if ($('.wRun', tr)) $('.wRun', tr).onclick = () => jpost(`/warmup/${id}/run`, { minutes: 10 }).then(j => { if (!j.ok) $('#wuStamp').textContent = 'Error: ' + j.error; refresh(); });
+    if ($('.wStop', tr)) $('.wStop', tr).onclick = () => jpost(`/warmup/${id}/stop`).then(refresh);
+    if ($('.wClear', tr)) $('.wClear', tr).onclick = () => jpost(`/warmup/${id}/clear`).then(refresh);
+  });
+  const active = state.devices.filter(d => d.warmup && d.warmup.day && !d.warmup.finished);
+  const mins = active.reduce((a, d) => a + Math.round((d.warmup.done || {}).scrollMin || 0), 0), want = active.reduce((a, d) => a + ((d.warmup.today || {}).scroll || 0), 0);
+  const cost = state.devices.reduce((a, d) => a + ((d.warmup && d.warmup.done && d.warmup.done.cost) || 0), 0);
+  const alerts = state.devices.filter(d => d.warmup && d.warmup.alert).length;
+  $('#wuFinding').innerHTML = active.length ? `<b>${active.length}</b> ${active.length === 1 ? 'phone' : 'phones'} warming up · Claude scrolled <b>${mins}</b> of ${want} min today · $${cost.toFixed(3)}${alerts ? ` · <b style="color:var(--pill-negative-ink)">${alerts} ${alerts === 1 ? 'alert' : 'alerts'}</b>` : ''}`
+    : 'No phone is warming up. Set a start date to begin.';
+}
+$('#wSave').onclick = async () => { const j = await jpost('/warmup', { window: [$('#wFrom').value, $('#wTo').value] }); $('#wMsg').textContent = j.ok ? 'Saved' : 'Error: ' + j.error; refresh(); };
+$('#tplSave').onclick = async () => {
+  const template = $$('#tplTable tbody tr').map(tr => { const o = {}; $$('input', tr).forEach(i => o[i.dataset.k] = i.type === 'checkbox' ? i.checked : +i.value); return o; });
+  const j = await jpost('/warmup', { template }); $('#tplMsg').textContent = j.ok ? 'Saved ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Error: ' + j.error; refresh();
+};
+
+// ---------- team (admins) ----------
+async function loadTeam() {
   await loadSettings();
-  $('#uPhones').innerHTML = `<label><input type="checkbox" id="uAll" checked> all phones</label> ` + state.devices.map(d => `<label><input type="checkbox" class="uDev" value="${d.id}"> ${esc(d.name)}</label>`).join(' ');
-  $('#uAll').onchange = () => document.querySelectorAll('.uDev').forEach(c => c.disabled = $('#uAll').checked);
+  $('#uPhones').innerHTML = `<label style="display:flex;gap:8px;align-items:center;color:var(--muted)"><span class="switch"><input type="checkbox" id="uAll" checked><i></i></span>All phones</label> ` + state.devices.map(d => `<label style="display:flex;gap:6px;align-items:center;color:var(--muted)"><input type="checkbox" class="uDev" value="${d.id}">${esc(d.name)}</label>`).join('');
+  $('#uAll').onchange = () => $$('.uDev').forEach(c => c.disabled = $('#uAll').checked);
   $('#uAll').onchange();
-  const list = await fetch('/users').then(r => r.json());
+  const [list, ins] = await Promise.all([fetch('/users').then(r => r.json()), fetch('/insights').then(r => r.json()).catch(() => ({ today: [], all: [] }))]);
   const tg = state.settings.targets || {};
-  $('#usersTable tbody').innerHTML = list.map(u => `<tr><td>${esc(u.name)}</td><td>${u.admin ? 'admin' : 'VA'}</td><td>${u.admin || u.devices === 'all' ? 'all' : u.devices.map(i => (state.devices.find(d => d.id === i) || { name: '#' + i }).name).join(', ') || 'none'}</td>
-    <td>${tg[u.name] ? [tg[u.name].texts ? tg[u.name].texts + ' comments' : '', tg[u.name].minutes ? tg[u.name].minutes + ' min' : ''].filter(Boolean).join(', ') : ''}</td>
-    <td style="text-align:right"><button class="small" data-edit="${esc(u.name)}">Edit</button> <button class="small danger" data-del="${esc(u.name)}">Remove</button></td></tr>`).join('');
-  $('#usersTable').querySelectorAll('[data-edit]').forEach(b => b.onclick = () => { const u = list.find(x => x.name === b.dataset.edit); $('#uName').value = u.name; $('#uPw').value = ''; $('#uAdmin').checked = u.admin;
-    $('#uAll').checked = u.admin || u.devices === 'all'; $('#uAll').onchange(); document.querySelectorAll('.uDev').forEach(c => c.checked = u.devices !== 'all' && Array.isArray(u.devices) && u.devices.includes(+c.value));
-    $('#uTexts').value = (tg[u.name] || {}).texts || ''; $('#uMinutes').value = (tg[u.name] || {}).minutes || ''; $('#uMsg').textContent = `Editing ${u.name}: leave the password empty to keep it`; });
-  $('#usersTable').querySelectorAll('[data-del]').forEach(b => b.onclick = async () => { if (!confirm(`Remove user ${b.dataset.del}?`)) return;
-    const j = await fetch('/users', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: b.dataset.del }) }).then(r => r.json()); $('#uMsg').textContent = j.ok ? `Removed ${b.dataset.del}` : 'Error: ' + j.error; if (j.ok) openUsers(); });
+  const day = name => ins.today.filter(r => r.user === name).reduce((a, r) => ({ minutes: a.minutes + r.minutes, texts: a.texts + (r.texts || 0) }), { minutes: 0, texts: 0 });
+  const last = name => Math.max(0, ...ins.all.filter(r => r.user === name).map(r => r.last));
+  const working = list.filter(u => day(u.name).minutes > 0).length;
+  $('#teamFinding').innerHTML = `<b>${working}</b> of ${list.length} ${list.length === 1 ? 'person' : 'people'} worked today · ${list.filter(u => u.admin).length} admin`;
+  $('#usersTable tbody').innerHTML = list.map(u => { const d = day(u.name), t = tg[u.name] || {}; return `<tr><td>${esc(u.name)}<span class="sub">${u.admin ? 'Admin' : 'VA'}</span></td><td>${u.admin || u.devices === 'all' ? 'All' : u.devices.map(i => (state.devices.find(x => x.id === i) || { name: '#' + i }).name).join(', ') || 'None'}</td>
+    <td class="num">${d.minutes}${t.minutes ? ` <span class="stamp">/ ${t.minutes} min</span>` : ' <span class="stamp">min</span>'}</td>
+    <td class="num">${d.texts}${t.texts ? ` <span class="stamp">/ ${t.texts}</span>` : ''}</td>
+    <td class="num">${fmtAgo(last(u.name) || 0)}</td>
+    <td style="text-align:right;white-space:nowrap"><button data-edit="${esc(u.name)}">Edit</button> <button class="danger" data-del="${esc(u.name)}">Remove</button></td></tr>`; }).join('');
+  $$('[data-edit]').forEach(b => b.onclick = () => { const u = list.find(x => x.name === b.dataset.edit); $('#uName').value = u.name; $('#uPw').value = ''; $('#uAdmin').checked = u.admin;
+    $('#uAll').checked = u.admin || u.devices === 'all'; $('#uAll').onchange(); $$('.uDev').forEach(c => c.checked = u.devices !== 'all' && Array.isArray(u.devices) && u.devices.includes(+c.value));
+    $('#uTexts').value = (tg[u.name] || {}).texts || ''; $('#uMinutes').value = (tg[u.name] || {}).minutes || ''; $('#uMsg').textContent = `Editing ${u.name}`; $('#uName').focus(); });
+  $$('[data-del]').forEach(b => b.onclick = async () => { if (!confirm(`Remove ${b.dataset.del}? They are signed out at once.`)) return;
+    const j = await jpost('/users', { name: b.dataset.del }, 'DELETE'); $('#uMsg').textContent = j.ok ? `Removed ${b.dataset.del}` : 'Error: ' + j.error; if (j.ok) loadTeam(); });
 }
 $('#uSave').onclick = async () => {
-  const body = { name: $('#uName').value, admin: $('#uAdmin').checked, devices: $('#uAll').checked ? 'all' : [...document.querySelectorAll('.uDev:checked')].map(c => +c.value) };
+  const body = { name: $('#uName').value, admin: $('#uAdmin').checked, devices: $('#uAll').checked ? 'all' : $$('.uDev:checked').map(c => +c.value) };
   if ($('#uPw').value) body.pw = $('#uPw').value;
-  const j = await fetch('/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(r => r.json());
+  const j = await jpost('/users', body);
   if (j.ok) {
     const targets = { ...(state.settings.targets || {}) }, t = { texts: +$('#uTexts').value || 0, minutes: +$('#uMinutes').value || 0 };
     if (t.texts || t.minutes) targets[j.user.name] = t; else delete targets[j.user.name];
-    await fetch('/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ targets }) });
+    await jpost('/settings', { targets });
   }
   $('#uMsg').textContent = j.ok ? `Saved ${j.user.name}` : 'Error: ' + j.error;
-  if (j.ok) { $('#uName').value = ''; $('#uPw').value = ''; $('#uTexts').value = ''; $('#uMinutes').value = ''; openUsers(); }
+  if (j.ok) { $('#uName').value = ''; $('#uPw').value = ''; $('#uTexts').value = ''; $('#uMinutes').value = ''; loadTeam(); }
 };
-$('#usersBtn').onclick = openUsers;
-$('#usersClose').onclick = () => $('#users').classList.remove('open');
 
 // ---------- insights (admins) ----------
 let insRange = 'today', insData = null;
-const COLORS = ['#4af', '#3c3', '#e94', '#c6f', '#f66', '#6ee', '#fc6', '#9f9'];
-async function openInsights() { $('#insights').classList.add('open'); insData = await fetch('/insights').then(r => r.json()); renderInsights(); }
+async function loadInsights() { insData = await fetch('/insights').then(r => r.json()); renderInsights(); }
 function renderInsights() {
   if (!insData) return;
   const rows = insData[insRange] || [];
-  $('#insTable tbody').innerHTML = rows.length ? rows.map(r => `<tr><td>${esc(r.user)}</td><td>${esc(r.phone)}</td><td class="num">${r.minutes}</td><td class="num">${r.sessions}</td><td class="num">${r.actions}</td><td class="num">${r.texts || 0}</td><td class="num">${r.likes}</td><td>${fmtAgo(r.last)}</td></tr>`).join('')
-    : '<tr><td colspan="8" style="color:var(--muted)">No activity in this range</td></tr>';
-  const users = [...new Set(insData.history.flatMap(h => Object.keys(h.users)))], max = Math.max(1, ...insData.history.map(h => Object.values(h.users).reduce((a, b) => a + b, 0)));
-  $('#insHist').innerHTML = insData.history.map(h => `<div class="col" title="${h.day}: ${Object.entries(h.users).map(([u, m]) => u + ' ' + m + ' min').join(', ')}">${users.map((u, i) => h.users[u] ? `<div class="seg" style="height:${h.users[u] / max * 100}%;background:${COLORS[i % COLORS.length]}"></div>` : '').join('')}</div>`).join('') || '<span style="color:var(--muted);font-size:12px">no data yet</span>';
-  $('#insLegend').innerHTML = users.map((u, i) => `<span><i class="sw" style="background:${COLORS[i % COLORS.length]}"></i>${esc(u)}</span>`).join('');
-  $('#insPhones').innerHTML = insData.devices.map(d => `<span style="margin-right:14px"><span class="dot ${d.ready ? 'on' : ''}" style="display:inline-block;margin-right:5px"></span>${esc(d.name)}${d.lockedBy ? ` <span class="lock">in use by ${esc(d.lockedBy)}</span>` : ''}</span>`).join('');
-  $('#insLog').textContent = insData.recent.map(e => `${e.time.replace('T', ' ').slice(0, 19)}  ${e.user.padEnd(10)}  ${e.text}`).join('\n');
+  const total = rows.reduce((a, r) => a + r.minutes, 0), people = new Set(rows.filter(r => r.user !== 'claude').map(r => r.user)).size;
+  const nPhones = new Set(rows.map(r => r.phone)).size;
+  $('#insFinding').innerHTML = rows.length ? `<b>${total}</b> min on ${nPhones} ${nPhones === 1 ? 'phone' : 'phones'} by ${people} ${people === 1 ? 'person' : 'people'}${rows.some(r => r.user === 'claude') ? ' and Claude' : ''}` : 'No activity in this range';
+  $('#insTable tbody').innerHTML = rows.length ? rows.map(r => `<tr><td>${esc(r.user)}</td><td>${esc(r.phone)}</td><td class="num">${r.minutes}</td><td class="num">${r.sessions}</td><td class="num">${r.actions}</td><td class="num">${r.texts || 0}</td><td class="num">${r.likes}</td><td class="num">${fmtAgo(r.last)}</td></tr>`).join('')
+    : '<tr><td colspan="8"><div class="empty">No activity in this range.</div></td></tr>';
+  const hist = insData.history || [];
+  const el = $('#insChart'); el.innerHTML = '';
+  if (hist.length && window.Charts) {
+    Charts.bars(el, { labels: hist.map(h => new Date(h.day + 'T12:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })),
+      values: hist.map(h => Object.values(h.users).reduce((a, b) => a + b, 0)), highlight: hist.length - 1, height: 200, format: v => `${Math.round(v)} min` });
+  } else el.innerHTML = '<div class="empty">No minutes logged in the last 30 days.</div>';
+  $('#insLog').innerHTML = insData.recent.map(e => `<div><span class="num">${esc(e.time.replace('T', ' ').slice(5, 16))}</span><span>${esc(e.user)}</span><span>${esc(e.text)}</span></div>`).join('');
 }
-$('#insightsBtn').onclick = openInsights;
-$('#insightsClose').onclick = () => $('#insights').classList.remove('open');
-$('#insights .tabs').querySelectorAll('button').forEach(b => b.onclick = () => { insRange = b.dataset.range; $('#insights .tabs .on')?.classList.remove('on'); b.classList.add('on'); renderInsights(); });
+$$('#insRange button').forEach(b => b.onclick = () => { insRange = b.dataset.range; $$('#insRange button').forEach(x => x.classList.toggle('on', x === b)); renderInsights(); });
 
 // ---------- stream level (per browser, remembered) ----------
 const streamLevel = () => $('#quality').value;
@@ -433,12 +779,12 @@ let levelApplied = false;
 $('#quality').onchange = () => { try { localStorage.setItem('streamLevel', streamLevel()); } catch {} applyLevel(); };
 function applyLevel() { state.devices.forEach(x => { if (x.ready && x.id !== state.focusId) post(x.id, 'quality', { level: streamLevel() }); }); }
 
-// ---------- own stats in the bar (every user) ----------
+// ---------- own numbers in the top bar (every user) ----------
 async function refreshMe() {
   const m = await fetch('/me').then(r => r.ok ? r.json() : null).catch(() => null); if (!m) return;
   const t = m.target || {};
-  const bar = (v, max) => max ? `<span class="bar"><i style="width:${Math.min(100, v / max * 100)}%"></i></span>${v}/${max}` : v;
-  $('#me').innerHTML = `today: ${bar(m.texts, t.texts)} comments · ${bar(m.minutes, t.minutes)} min · ${m.likes} likes`;
+  const part = (label, v, max, unit = '') => `<span>${label} ${max ? `<span class="meter"><i style="width:${Math.min(100, v / max * 100)}%"></i></span><b class="num">${v}</b> / ${max}${unit}` : `<b class="num">${v}</b>${unit}`}</span>`;
+  $('#today').innerHTML = `<span>Your day</span>${part('Comments', m.texts, t.texts)}${part('Time', m.minutes, t.minutes, ' min')}${part('Likes', m.likes, 0)}`;
 }
 
 // ---------- status refresh ----------
@@ -452,32 +798,49 @@ function health(d) {
   return parts.join(' · ');
 }
 function refreshStatus() {
-  for (const d of statusCache) document.querySelectorAll(`[data-id="${d.id}"]`).forEach(el => {
-    el.classList.toggle('locked', !!d.lockedBy); el.classList.toggle('offline', !d.ready);
-    $('.dot', el).classList.toggle('on', d.ready);
-    const stream = $('img', el).naturalWidth > 0;
-    const off = !d.ready && d.offlineMin >= 5 ? ` offline ${d.offlineMin} min` : '';
-    $('.st', el).textContent = (d.ready ? 'ready' : d.running ? 'starting' : 'offline') + off + (stream ? '' : ', no stream') + (d.battery != null ? `, ${d.battery}%` : '');
-    $('.st', el).style.color = off ? 'var(--warn)' : '';
-    if (d.lockedBy) $('.msg', el).innerHTML = `<span class="lock">in use by ${esc(d.lockedBy)}</span>`;
-    else if ($('.msg', el).querySelector('.lock')) $('.msg', el).textContent = '';
+  for (const d of statusCache) $$(`[data-id="${d.id}"].tile`).forEach(el => {
+    const w = d.warmup || {}, claude = !!w.claude;
+    el.classList.toggle('locked', !!d.lockedBy && !claude); el.classList.toggle('offline', !d.ready); el.classList.toggle('claude-on', claude);
+    const dot = $('.dot', el); dot.classList.toggle('on', d.ready); dot.classList.toggle('starting', !d.ready && d.running);
+    $('.t-meta', el).textContent = d.ready ? (d.battery != null ? `${d.battery}%` : '') : d.running ? 'starting' : `offline${d.offlineMin >= 1 ? ' ' + d.offlineMin + ' min' : ''}`;
+    $('.offline', el).textContent = d.running ? 'Phone is starting. This takes a minute after plugging in.' : 'Phone offline. Check the USB cable.';
+    const al = $('.alert', el); al.hidden = !w.alert; if (w.alert) $('span', al).textContent = `Stopped: ${w.alert.reason}. ${state.admin ? 'Check the phone, then clear.' : 'Tell an admin.'}`;
+    if (claude) { const m = Math.max(1, Math.round((Date.now() - w.claude.since) / 60000)); $('.ctext', el).textContent = `Claude scrolls · ${m}/${w.claude.minutes} min`; $('.ctext', el).title = `Claude is scrolling, minute ${m} of ${w.claude.minutes}, ${w.claude.reels} reels`; }
+    renderWarmup(el, d);
+    const m = $('.msg', el);
+    if (d.lockedBy && !claude) m.innerHTML = `<span class="lock">In use by ${esc(d.lockedBy)}</span>`;
+    else if (m.querySelector('.lock')) m.textContent = '';
   });
-  if (state.focusId != null) { const d = statusCache.find(x => x.id === state.focusId); if (d) $('#focusHealth').innerHTML = health(d) + (state.admin ? ` · <button class="small danger" onclick="rebootPhone(${d.id})">Reboot phone</button>` : ''); }
+  if (state.focusId != null) { const d = statusCache.find(x => x.id === state.focusId); if (d) $('#focusHealth').innerHTML = health(d) + (state.admin ? ` · <button class="danger" style="height:26px" onclick="rebootPhone(${d.id})">Reboot phone</button>` : ''); }
+  // the finding: what needs a person first
+  const ready = statusCache.filter(d => d.ready).length, alerts = statusCache.filter(d => d.warmup && d.warmup.alert), claude = statusCache.filter(d => d.warmup && d.warmup.claude);
+  const due = statusCache.filter(d => d.warmup && d.warmup.today && !d.warmup.paused && !d.warmup.alert && ((d.warmup.done.likes || 0) < d.warmup.today.likes || (d.warmup.done.comments || 0) < d.warmup.today.comments));
+  const bits = [];
+  if (alerts.length) bits.push(`<b style="color:var(--pill-negative-ink)">${alerts.map(d => esc(d.name)).join(', ')} stopped by the watch</b>`);
+  if (due.length) bits.push(`<b>${due.length}</b> ${due.length === 1 ? 'phone needs' : 'phones need'} likes or comments today`);
+  if (claude.length) bits.push(`Claude is scrolling on ${claude.map(d => esc(d.name)).join(', ')}`);
+  bits.push(`${ready} of ${statusCache.length} ready`);
+  $('#finding').innerHTML = bits.join(' · ');
+  const ac = $('#alertCount'); ac.hidden = !alerts.length; ac.textContent = alerts.length;
+  $('#sideFoot').textContent = `${statusCache.length} phones over USB`;
 }
-function rebootPhone(id) { if (confirm('Reboot this phone? It will be offline for about a minute.')) post(id, 'reboot').then(j => j && j.ok && note(id, 'rebooting')); }
+function rebootPhone(id) { if (confirm('Reboot this phone? It will be offline for about a minute.')) post(id, 'reboot').then(j => j && j.ok && note(id, 'Rebooting')); }
 async function refresh() {
   const r = await fetch('/devices').catch(() => null);
   if (!r) return; if (r.status === 401) return location.href = '/login';
   const { user, admin, devices } = await r.json();
   const first = !state.user;
   state.user = user; state.admin = admin; state.devices = devices; statusCache = devices;
-  $('#who').textContent = `${user}${admin ? ' (admin)' : ''}`;
-  for (const id of ['insightsBtn', 'usersBtn', 'settingsBtn']) $('#' + id).style.display = admin ? '' : 'none';
-  if (first) await loadSettings();
+  $('#who').textContent = user;
+  $$('.admin-only').forEach(e => e.hidden = !admin);
+  if (first) { await loadSettings(); route(); }
   for (const d of devices) if (!$(`#grid [data-id="${d.id}"]`)) $('#grid').appendChild(phoneView(d, false));
   refreshStatus();
+  if (state.view === 'warmup') renderWarmupTable();
   if (!levelApplied && devices.some(d => d.ready) && streamLevel() !== 'normal') { levelApplied = true; applyLevel(); }
 }
+// show the view from the address at once; refresh() corrects it when /devices says who is signed in
+{ const v = location.hash.slice(1); state.view = VIEWS.includes(v) ? v : 'phones'; showView(state.view); }
 refresh(); setInterval(refresh, 5000); refreshMe(); setInterval(refreshMe, 30000); setInterval(loadSettings, 60000);
 </script>
 </body>

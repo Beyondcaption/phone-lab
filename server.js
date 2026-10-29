@@ -55,11 +55,18 @@ function checkPassword(u, pw) {
 }
 function cookie(req) { const m = /(?:^|;\s*)pl=([a-f0-9]{48})/.exec(req.headers.cookie || ''); return m && sessions.get(m[1]); }
 const allowed = (u, dev) => u.admin || u.devices === 'all' || (Array.isArray(u.devices) && u.devices.includes(dev.id));
-const LOGIN_HTML = (msg = '') => `<!doctype html><html lang="de"><meta charset="utf-8"><title>phone-lab sign in</title>
-<style>body{margin:0;background:#111;color:#ddd;font:15px system-ui;display:flex;align-items:center;justify-content:center;height:100vh}
-form{background:#1c1c1c;padding:24px;border-radius:8px;display:flex;flex-direction:column;gap:10px;width:260px}input,button{padding:8px;background:#222;color:#ddd;border:1px solid #444}button{cursor:pointer}.m{color:#e66;min-height:18px}</style>
-<form method="post" action="/login"><b>phone-lab</b><input name="name" placeholder="Username" autocomplete="username" required autofocus>
-<input name="pw" type="password" placeholder="Password" autocomplete="current-password" required><button>Sign in</button><div class="m">${msg}</div></form>`;
+const LOGIN_HTML = (msg = '') => `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>phone-lab sign in</title>
+<style>body{margin:0;background:#0c0d0f;color:#fff;font:14px/20px Inter,system-ui,-apple-system,"Segoe UI",sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:16px;box-sizing:border-box}
+main{background:#15171a;padding:28px;border-radius:20px;width:340px;max-width:100%;display:flex;flex-direction:column;gap:16px}
+h1{font-size:20px;line-height:28px;font-weight:600;margin:0;display:flex;align-items:center;gap:10px}p{margin:-8px 0 4px;color:#b4b4b4}
+label{display:flex;flex-direction:column;gap:8px;color:#b4b4b4;font-weight:500;font-size:13px}
+input{height:40px;padding:0 12px;border-radius:10px;border:1px solid #444;background:#0c0d0f;color:#fff;font:inherit}input:focus-visible,button:focus-visible{outline:2px solid #fff;outline-offset:2px}
+button{height:40px;border-radius:999px;border:0;background:#fff;color:#000;font:500 14px Inter,system-ui,sans-serif;cursor:pointer;margin-top:4px}button:hover{background:#e6e6e6}
+.m{color:#f07a8c;min-height:20px}</style>
+<main><h1><svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><rect x="5.5" y="1.5" width="11" height="19" rx="3" fill="none" stroke="#fff" stroke-width="1.6"/><rect x="8" y="6" width="6" height="9" rx="1" fill="#c6f24e"/></svg>phone-lab</h1>
+<p>Sign in to work on your phones.</p>
+<form method="post" action="/login" style="display:flex;flex-direction:column;gap:16px"><label>Username<input name="name" autocomplete="username" required autofocus></label>
+<label>Password<input name="pw" type="password" autocomplete="current-password" required></label><button>Sign in</button><div class="m" role="alert">${msg}</div></form></main>`;
 
 // ---------- WDA-HTTP ----------
 function wda(dev, method, p, body, timeout = 15000) {
@@ -355,7 +362,8 @@ const server = http.createServer(async (req, res) => {
     protokoll(u.name, ip, 'login');
     res.writeHead(303, { 'Set-Cookie': `pl=${token}; HttpOnly; SameSite=Strict; Path=/${secure}`, Location: '/' }); return res.end();
   }
-  const user = cookie(req);
+  // Nur im Testbetrieb ohne iPhones: PHONELAB_AUTOLOGIN=name meldet jede Anfrage ohne Cookie als diesen Admin an (für Screenshots)
+  const user = cookie(req) || (FAKE && process.env.PHONELAB_AUTOLOGIN ? { name: process.env.PHONELAB_AUTOLOGIN, admin: true, devices: 'all', ip } : null);
   if (route === 'logout') {
     if (user) { protokoll(user.name, ip, 'logout'); for (const [t, u] of sessions) if (u === user) sessions.delete(t); }
     res.writeHead(303, { 'Set-Cookie': 'pl=; Max-Age=0; Path=/', Location: '/' }); return res.end();
@@ -367,6 +375,10 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'GET' && (route === '' || route === undefined || route === 'login')) {
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     return fs.createReadStream(path.join(ROOT, 'index.html')).pipe(res);
+  }
+  if (req.method === 'GET' && route === 'charts.js') {
+    res.writeHead(200, { 'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': 'max-age=3600' });
+    return fs.createReadStream(path.join(ROOT, 'charts.js')).pipe(res);
   }
   if (route === 'users') {
     if (!user.admin) return json(res, 403, { error: 'admins only' });

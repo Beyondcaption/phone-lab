@@ -10,7 +10,10 @@ Es gibt zwei Rollen von Macs:
 ## Dateien
 
 - server.js: Node-Server ohne Zusatzpakete. Startet WDA je Gerät über go-ios, überwacht es, reicht den Stream durch, nimmt Eingaben an. Nur 127.0.0.1:3000.
-- index.html: Kachel-Seite.
+- index.html: Dashboard (Phones, Warmup, Insights, Team, Snippets & notes), charts.js: Diagramme dazu (taste-skill, ohne Pakete).
+- warmup.js: Warmup je Handy im Serverprozess (14-Tage-Plan, Claude-Scroll-Sitzungen, VA-Ziele, Wächter). Zustand in warmup.json, Log logs/scroll.jsonl, Alarme logs/alerts.log.
+- scroll.js: nur noch Selbsttest der Wisch- und Verweil-Verteilungen (`node scroll.js --dry`).
+- test/: `node test/e2e.js` prüft Server und Warmup gegen nachgemachte Handys (geht auch auf Windows), `node test/demo.js` startet eine Vorschau mit Beispieldaten unter http://127.0.0.1:3000.
 - usbmux.js, plist.js: Portweiterleitung über Apples USB-Dienst usbmuxd, ersetzt iproxy.
 - add-device.js: nimmt angesteckte iPhones in devices.json auf, blendet den Entwicklermodus-Schalter ein.
 - devices.json: Geräte (UDID, Ports), Apple-Team-ID, Bundle-ID von WDA.
@@ -133,6 +136,14 @@ FileVault an, Firewall an (geprüft am 28.10.2026). Automatische Anmeldung nur, 
 - Admin: Users (Benutzer, Handys, Tagesziele), Snippets & notes (Textbausteine global und je Handy, Beschriftung, Notiz), Insights (Zeit je Benutzer und Handy, 30-Tage-Verlauf, CSV-Export, Ereignisse), Reboot je Handy im Focus.
 - Jeder sieht in der Leiste seine Tageswerte und Ziele. Apps in devices.json unter "apps" (Name: Bundle-ID).
 - settings.json (Snippets, Notizen, Ziele) und users.json bleiben beim App-Update erhalten.
+
+## Warmup
+
+- Admin trägt je Handy unter Warmup ein Startdatum und die Nische ein. Ab dem Tag gilt die 14-Tage-Vorlage (ebenda änderbar): Claude-Minuten und Sitzungen, Likes und Kommentare als Tagesziel der VA, Post-Tage.
+- Claude nur wischt (Reels, Verweildauer nach Nische), keine Likes, Kommentare, Follows, DMs, Profilbesuche. Sitzungen starten zufällig im Zeitfenster, mindestens 90 min Abstand. Während einer Sitzung ist das Handy als Claude belegt; jeder Befehl einer VA oder "Take over" beendet sie sofort.
+- Bewertung je Reel mit Haiku 5.5 (ein Standbild, etwa 0,02 Cent), nur wenn `ANTHROPIC_API_KEY` in `~/Library/Application Support/phone-lab/.env` steht. Ohne Key wird ohne Nischen-Bewertung gescrollt. Kosten je Handy und Tag stehen unter Warmup.
+- Wächter: Stoppwörter (Captcha, ungewöhnliche Aktivität, Sperre) oder eine Warnung laut Claude beenden die Sitzung, nehmen das Handy aus dem Plan und zeigen einen roten Hinweis auf der Kachel plus macOS-Mitteilung. Auch während eine VA arbeitet, wird höchstens einmal je Minute in einer Tipp-Pause geprüft. Erst nach "Clear" plant Claude wieder.
+- Likes zählen als Doppeltipp, Kommentare als gesendeter Text oder Enter beim direkten Tippen.
 
 ## Grenzen
 
