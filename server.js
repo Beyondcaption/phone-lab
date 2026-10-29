@@ -30,6 +30,11 @@ const SETTINGS = { ...QUALITY.normal, waitForIdleTimeout: 0, animationCoolOffTim
 fs.mkdirSync(path.join(ROOT, 'logs'), { recursive: true });
 const logFile = name => fs.openSync(path.join(ROOT, 'logs', name), 'a');
 
+// ---------- Einstellungen: Textbausteine, Notizen, Beschriftungen, Tagesziele (vom Admin gepflegt) ----------
+const SETTINGS_FILE = path.join(ROOT, 'settings.json');
+const loadSettings = () => { try { return { snippets: { global: [], phone: {} }, notes: {}, labels: {}, targets: {}, ...JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')) }; } catch { return { snippets: { global: [], phone: {} }, notes: {}, labels: {}, targets: {} }; } };
+const APPS = CFG.apps || { Instagram: INSTAGRAM };
+
 // ---------- Benutzer, Login-Sitzungen, Protokoll ----------
 const USERS_FILE = path.join(ROOT, 'users.json');
 const users = () => { try { return JSON.parse(fs.readFileSync(USERS_FILE, 'utf8')).users; } catch { return []; } };
@@ -111,6 +116,14 @@ const cmd = {
     return withSession(dev, sid => wda(dev, 'POST', `/session/${sid}/actions`, touch(steps)));
   },
   text: (dev, { text }) => withSession(dev, sid => wda(dev, 'POST', `/session/${sid}/wda/keys`, { value: [String(text)] })),
+  // einzelne Tastendrücke (direktes Tippen im Focus): "\b" löscht, "\n" ist Enter
+  keys: (dev, { text }) => withSession(dev, sid => wda(dev, 'POST', `/session/${sid}/wda/keys`, { value: [String(text).slice(0, 200)] })),
+  // langer Druck, z. B. für Kontextmenüs
+  press: (dev, { x, y, ms }) => withSession(dev, sid => wda(dev, 'POST', `/session/${sid}/actions`, touch([
+    { type: 'pointerMove', duration: 0, ...px(dev, +x, +y) }, { type: 'pointerDown', button: 0 },
+    { type: 'pause', duration: Math.min(3000, Math.max(300, +ms || 800)) }, { type: 'pointerUp', button: 0 }]))),
+  // App aus der Liste in devices.json öffnen
+  launch: (dev, { app }) => { const id = APPS[app]; if (!id) throw new Error('unknown app'); return withSession(dev, sid => wda(dev, 'POST', `/session/${sid}/wda/apps/launch`, { bundleId: id })); },
   home: dev => wda(dev, 'POST', '/wda/homescreen'),
   quality: (dev, { level }) => withSession(dev, sid => wda(dev, 'POST', `/session/${sid}/appium/settings`, { settings: QUALITY[level] || QUALITY.normal })),
   instagram: dev => withSession(dev, sid => wda(dev, 'POST', `/session/${sid}/wda/apps/launch`, { bundleId: INSTAGRAM })),
@@ -144,6 +157,7 @@ async function ensureTunnel() {
 async function startWda(dev) {
   if (dev.stopping) return;
   dev.sid = null; dev.fails = 0; dev.started = Date.now();
+  if (!dev.ios) iosOut(['info', '--udid=' + dev.udid]).then(o => { try { const j = JSON.parse(o.trim().split('\n').filter(l => l.startsWith('{')).pop()); dev.ios = j.ProductVersion; dev.model = j.ProductType; } catch {} });
   const log = logFile(`handy-${dev.id}.log`);
   try {
     if (!(await usbmux.listDevices()).some(d => d.udid === dev.udid)) throw new Error('nicht per USB verbunden');
@@ -175,11 +189,11 @@ function killWda(dev) {
 async function health(dev) {
   try {
     const r = await wda(dev, 'GET', '/status', undefined, 3000);
-    dev.ready = !!r.value.ready; dev.fails = 0;
+    dev.ready = !!r.value.ready; dev.fails = 0; if (dev.ready) { if (!dev.readySince) dev.readySince = Date.now(); dev.lastReady = Date.now(); }
     const b = await withSession(dev, sid => wda(dev, 'GET', `/session/${sid}/wda/batteryInfo`, undefined, 3000)).catch(() => null);
     dev.battery = b && b.value.level >= 0 ? Math.round(b.value.level * 100) : null;
   } catch {
-    dev.ready = false; dev.sid = null;
+    dev.ready = false; dev.sid = null; dev.readySince = null;
     // erst nach 5 min Startzeit zählen: Entwicklerbild, Installation und erster Start dauern beim neuen Gerät einige Minuten
     if (dev.proc && Date.now() - dev.started > 300000 && ++dev.fails >= 3) { console.log(`[${dev.name}] WDA antwortet nicht, Neustart`); dev.fails = 0; killWda(dev); }
   }
@@ -200,8 +214,11 @@ function insights() {
   }
   const now = Date.now(), day = 86400000;
   const dur = s => Math.max(30000, s.end - s.start);   // eine Sitzung zählt mindestens 30 s
-  const sum = (filter) => { const by = {}; for (const s of sessions.filter(filter)) { const k = s.user + '|' + s.phone; by[k] = by[k] || { user: s.user, phone: s.phone, minutes: 0, sessions: 0, actions: 0, last: 0, likes: 0 }; const b = by[k]; b.minutes += dur(s) / 60000; b.sessions++; b.actions += s.actions; b.likes += s.counts.doubletap || 0; b.last = Math.max(b.last, s.end); } return Object.values(by).map(b => ({ ...b, minutes: Math.round(b.minutes) })).sort((a, b) => b.minutes - a.minutes); };
-  return { today: sum(s => now - s.end < day), week: sum(s => now - s.end < 7 * day), all: sum(() => true), recent: events.slice(-80).reverse(),
+  const sum = (filter) => { const by = {}; for (const s of sessions.filter(filter)) { const k = s.user + '|' + s.phone; by[k] = by[k] || { user: s.user, phone: s.phone, minutes: 0, sessions: 0, actions: 0, last: 0, likes: 0, texts: 0 }; const b = by[k]; b.minutes += dur(s) / 60000; b.sessions++; b.actions += s.actions; b.likes += s.counts.doubletap || 0; b.texts += (s.counts.text || 0) + (s.counts.keys ? 1 : 0); b.last = Math.max(b.last, s.end); } return Object.values(by).map(b => ({ ...b, minutes: Math.round(b.minutes) })).sort((a, b) => b.minutes - a.minutes); };
+  // Verlauf: Minuten je Benutzer und Tag, letzte 30 Tage
+  const days = {}; for (const s of sessions) { if (now - s.end > 30 * day) continue; const k = new Date(s.start).toISOString().slice(0, 10); days[k] = days[k] || {}; days[k][s.user] = (days[k][s.user] || 0) + dur(s) / 60000; }
+  const history = Object.keys(days).sort().map(k => ({ day: k, users: Object.fromEntries(Object.entries(days[k]).map(([u, m]) => [u, Math.round(m)])) }));
+  return { today: sum(s => now - s.end < day), week: sum(s => now - s.end < 7 * day), all: sum(() => true), recent: events.slice(-80).reverse(), history, sessions,
     devices: CFG.devices.map(d => ({ name: d.name, ready: !!d.ready, lockedBy: d.lockedBy && now - d.lockAt < LOCK_MS ? d.lockedBy : null })) };
 }
 
@@ -315,14 +332,40 @@ const server = http.createServer(async (req, res) => {
     if (!user.admin) return json(res, 403, { error: 'admins only' });
     return json(res, 200, insights());
   }
+  if (route === 'settings') {
+    if (req.method === 'GET') { const st = loadSettings(); return json(res, 200, { ...st, apps: Object.keys(APPS), targets: user.admin ? st.targets : { [user.name]: st.targets[user.name] || null } }); }
+    if (req.method === 'POST') {
+      if (!user.admin) return json(res, 403, { error: 'admins only' });
+      const b = await body(req), st = loadSettings();
+      for (const k of ['snippets', 'notes', 'labels', 'targets']) if (b[k] !== undefined) st[k] = b[k];
+      fs.writeFileSync(SETTINGS_FILE, JSON.stringify(st, null, 2) + '\n'); protokoll(user.name, ip, 'updates settings'); return json(res, 200, { ok: true });
+    }
+  }
+  if (req.method === 'GET' && route === 'me') {
+    const t = insights().today.filter(r => r.user === user.name);
+    const sum = k => t.reduce((a, r) => a + (r[k] || 0), 0);
+    return json(res, 200, { user: user.name, minutes: sum('minutes'), actions: sum('actions'), texts: sum('texts'), likes: sum('likes'), target: loadSettings().targets[user.name] || null });
+  }
+  if (req.method === 'GET' && route === 'insights.csv') {
+    if (!user.admin) return json(res, 403, { error: 'admins only' });
+    const rows = insights().sessions.map(s => [new Date(s.start).toISOString(), new Date(s.end).toISOString(), s.user, s.phone, Math.round(Math.max(30000, s.end - s.start) / 60000 * 10) / 10, s.actions, s.counts.text || 0, s.counts.doubletap || 0].join(','));
+    res.writeHead(200, { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': 'attachment; filename="phone-lab-sessions.csv"' });
+    return res.end(['start,end,user,phone,minutes,actions,texts,likes', ...rows].join('\n') + '\n');
+  }
   if (req.method === 'GET' && route === 'devices') {
     return json(res, 200, { user: user.name, admin: user.admin, devices: CFG.devices.filter(d => allowed(user, d)).map(d => ({
       id: d.id, name: d.name, ready: !!d.ready, battery: d.battery ?? null, w: d.w, h: d.h, running: !!d.proc,
+      ios: d.ios || null, uptimeMin: d.readySince ? Math.round((Date.now() - d.readySince) / 60000) : null, offlineMin: !d.ready && d.lastReady ? Math.round((Date.now() - d.lastReady) / 60000) : null,
       lockedBy: d.lockedBy && Date.now() - d.lockAt < LOCK_MS && d.lockedBy !== user.name ? d.lockedBy : null })) });
   }
   const dev = CFG.devices.find(d => String(d.id) === idStr);
   if (!dev || !allowed(user, dev)) return json(res, 404, { error: 'unknown phone' });
   if (req.method === 'GET' && route === 'stream') return streamClient(dev, res);
+  if (req.method === 'POST' && route === 'cmd' && action === 'reboot') {
+    if (!user.admin) return json(res, 403, { error: 'admins only' });
+    protokoll(user.name, ip, `${dev.name} reboot`); dev.sid = null;
+    try { await ios(['reboot', '--udid=' + dev.udid], logFile(`handy-${dev.id}.log`)); return json(res, 200, { ok: true }); } catch (e) { return json(res, 502, { ok: false, error: e.message }); }
+  }
   if (req.method === 'POST' && route === 'cmd' && action === 'quality') {
     try { await cmd.quality(dev, await body(req)); return json(res, 200, { ok: true }); } catch (e) { return json(res, 502, { ok: false, error: e.message }); }
   }

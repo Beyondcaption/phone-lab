@@ -8,64 +8,95 @@
   :root { --bg: #111; --panel: #1c1c1c; --line: #333; --text: #ddd; --muted: #888; --ok: #3c3; --bad: #c33; --warn: #e94; --accent: #4af; }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--text); font: 14px system-ui, sans-serif; }
-  #bar { display: flex; align-items: center; gap: 14px; padding: 10px 16px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--bg); z-index: 5; }
+  #bar { display: flex; align-items: center; gap: 10px; padding: 8px 16px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--bg); z-index: 5; flex-wrap: wrap; }
   #bar b { font-size: 16px; }
   #bar .sp { flex: 1; }
+  #me { color: var(--muted); font-size: 13px; }
+  #me .bar { display: inline-block; width: 90px; height: 6px; background: #333; border-radius: 3px; vertical-align: middle; margin: 0 6px; overflow: hidden; }
+  #me .bar i { display: block; height: 100%; background: var(--accent); }
   button { background: #2a2a2a; color: var(--text); border: 1px solid #444; padding: 6px 10px; border-radius: 6px; cursor: pointer; font: inherit; }
   button:hover { background: #383838; }
   button.on { background: #264; border-color: #3a7; }
-  select { background: #222; color: var(--text); border: 1px solid #444; padding: 5px 6px; border-radius: 6px; font: inherit; }
-  input[type=text], input[type=number] { background: #222; color: var(--text); border: 1px solid #444; padding: 6px 8px; border-radius: 6px; font: inherit; }
+  button.primary { background: #2a4d7a; border-color: #3a6aa6; }
+  button.danger { border-color: #844; }
+  button.small { padding: 3px 7px; font-size: 12px; }
+  select, input[type=text], input[type=number], textarea { background: #222; color: var(--text); border: 1px solid #444; padding: 6px 8px; border-radius: 6px; font: inherit; }
+  textarea { width: 100%; min-height: 70px; font-size: 13px; }
+  label { color: var(--muted); font-size: 13px; }
   #grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; padding: 16px; }
   .tile { background: var(--panel); border-radius: 10px; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
   .head { display: flex; align-items: center; gap: 8px; font-size: 13px; }
-  .head b { font-size: 14px; }
+  .head b { font-size: 14px; white-space: nowrap; }
   .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--bad); flex: none; }
   .dot.on { background: var(--ok); }
   .st { color: var(--muted); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .label { color: var(--accent); font-size: 12px; }
+  .note { color: var(--warn); font-size: 12px; white-space: pre-wrap; }
   .screen { position: relative; background: #000; aspect-ratio: 375 / 667; cursor: crosshair; user-select: none; -webkit-user-select: none; touch-action: none; border-radius: 6px; overflow: hidden; }
   .screen img { width: 100%; height: 100%; display: block; pointer-events: none; -webkit-user-drag: none; user-select: none; -webkit-user-select: none; }
   .screen canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  .screen .typing { position: absolute; left: 6px; top: 6px; background: rgba(0,0,0,.6); color: #fff; font-size: 11px; padding: 2px 6px; border-radius: 4px; display: none; }
   .tile.locked .screen { opacity: .4; cursor: not-allowed; }
+  .tile.offline .screen img { opacity: .3; }
   .lock { color: var(--warn); font-size: 12px; }
   .row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
-  .row input[type=text] { flex: 1; min-width: 120px; }
+  .row input[type=text] { flex: 1; min-width: 100px; }
   .msg { font-size: 12px; color: var(--muted); min-height: 16px; }
   .kbd { display: inline-block; border: 1px solid #555; border-radius: 4px; padding: 0 5px; font: 11px ui-monospace, monospace; color: #bbb; }
+  .chips { display: flex; flex-wrap: wrap; gap: 5px; }
+  .chips button { font-size: 12px; padding: 3px 8px; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
   /* Focus view */
-  #focus { position: fixed; inset: 0; background: rgba(0,0,0,.85); display: none; z-index: 10; padding: 16px; overflow: auto; }
-  #focus.open { display: flex; gap: 16px; align-items: flex-start; justify-content: center; }
-  #focus .tile { width: min(420px, 100%); }
-  #focus .side { width: 300px; background: var(--panel); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+  #focus { position: fixed; inset: 0; background: rgba(0,0,0,.88); display: none; z-index: 10; padding: 16px; overflow: auto; }
+  #focus.open { display: flex; gap: 16px; align-items: flex-start; justify-content: center; flex-wrap: wrap; }
+  #focus .tile { width: min(430px, 100%); }
+  #focus .side { width: 320px; max-width: 100%; background: var(--panel); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
   #focus .side h3 { margin: 0; font-size: 15px; }
+  #focus .side h4 { margin: 6px 0 0; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
   #focus .side .help { color: var(--muted); font-size: 12px; line-height: 1.7; }
   #focus .phones { display: flex; flex-wrap: wrap; gap: 6px; }
+  .typemode { border: 1px solid #3a6aa6; border-radius: 6px; padding: 6px 8px; font-size: 12px; color: var(--muted); cursor: pointer; }
+  .typemode.on { background: #1d3350; color: var(--text); }
 
-  /* Modals: Insights, Users */
+  /* Modals */
   .modal { position: fixed; inset: 0; background: rgba(0,0,0,.85); display: none; z-index: 10; padding: 24px; overflow: auto; }
   .modal.open { display: block; }
   .modal .box { max-width: 1000px; margin: 0 auto; background: var(--panel); border-radius: 10px; padding: 16px; }
   .modal h2 { margin: 0; font-size: 18px; }
   .modal h3 { margin: 16px 0 6px; font-size: 14px; color: var(--muted); }
-  .modal label { color: var(--muted); font-size: 13px; }
-  button.primary { background: #2a4d7a; border-color: #3a6aa6; }
-  button.danger { border-color: #844; }
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--line); }
+  th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
   th { color: var(--muted); font-weight: normal; }
   td.num, th.num { text-align: right; }
   .tabs { display: flex; gap: 6px; margin-top: 10px; }
   .log { font: 12px ui-monospace, monospace; color: #bbb; max-height: 260px; overflow: auto; white-space: pre; }
+  .hist { display: flex; align-items: flex-end; gap: 3px; height: 120px; border-bottom: 1px solid var(--line); padding-bottom: 2px; overflow-x: auto; }
+  .hist .col { flex: 1 0 14px; display: flex; flex-direction: column-reverse; min-width: 14px; height: 100%; }
+  .hist .seg { width: 100%; }
+  .hist-legend { display: flex; gap: 12px; font-size: 12px; color: var(--muted); margin-top: 6px; flex-wrap: wrap; }
+  .sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: middle; }
+  .health { color: var(--muted); font-size: 12px; }
+  .health .warn { color: var(--warn); }
+  @media (max-width: 800px) {
+    #grid { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; padding: 10px; }
+    #focus { padding: 8px; }
+    #focus .side { width: 100%; }
+    .modal { padding: 8px; }
+  }
 </style>
 </head>
 <body>
 <div id="bar">
   <b>phone-lab</b>
-  <span id="who" style="color:var(--muted)"></span>
+  <span id="who" style="color:var(--muted);font-size:13px"></span>
+  <span id="me"></span>
   <span class="sp"></span>
-  <label style="color:var(--muted);font-size:13px">Stream <select id="quality" title="Light for slow connections, Smooth for fast ones. The phone in focus is always smooth.">
+  <label>Stream <select id="quality" title="Light for slow connections, Smooth for fast ones. The phone in focus is always smooth.">
     <option value="light">Light</option><option value="normal" selected>Normal</option><option value="smooth">Smooth</option></select></label>
+  <label>Auto all <input type="number" id="allSec" min="3" max="60" value="8" style="width:56px" title="seconds per reel"></label>
+  <button id="autoAll" title="Start auto-scroll on every phone that is ready">Start</button>
+  <button id="stopAll" title="Stop auto-scroll everywhere">Stop</button>
+  <button id="settingsBtn" style="display:none">Snippets &amp; notes</button>
   <button id="usersBtn" style="display:none">Users</button>
   <button id="insightsBtn" style="display:none">Insights</button>
   <a href="/logout"><button>Sign out</button></a>
@@ -77,37 +108,55 @@
   <div class="side">
     <h3>Focus</h3>
     <div class="phones" id="focusPhones"></div>
+    <div class="typemode" id="typemode" title="Press T to toggle. When on, everything you type goes straight to the phone, including Backspace and Enter.">Direct typing: off <span class="kbd">T</span></div>
+    <h4>Snippets</h4>
+    <div class="chips" id="focusSnippets"><span style="color:var(--muted);font-size:12px">none yet</span></div>
+    <h4>Shortcuts</h4>
     <div class="help">
-      <span class="kbd">Click</span> tap &nbsp; <span class="kbd">Shift+Click</span> double tap (like)<br>
-      <span class="kbd">Drag</span> swipe along the mouse path<br>
-      <span class="kbd">H</span> home &nbsp; <span class="kbd">I</span> Instagram &nbsp; <span class="kbd">A</span> auto-scroll<br>
-      <span class="kbd">←</span> <span class="kbd">→</span> previous / next phone &nbsp; <span class="kbd">Esc</span> close<br>
-      Text field: <span class="kbd">Enter</span> sends to the field focused on the phone
+      <span class="kbd">Click</span> tap &nbsp; <span class="kbd">Shift+Click</span> double tap (like) &nbsp; <span class="kbd">Right-click</span> long press<br>
+      <span class="kbd">Drag</span> swipe along the mouse path &nbsp; <span class="kbd">B</span> back (edge swipe)<br>
+      <span class="kbd">H</span> home &nbsp; <span class="kbd">I</span> Instagram &nbsp; <span class="kbd">A</span> auto-scroll &nbsp; <span class="kbd">S</span> save screenshot<br>
+      <span class="kbd">←</span> <span class="kbd">→</span> previous / next phone &nbsp; <span class="kbd">Esc</span> close
     </div>
+    <div class="health" id="focusHealth"></div>
     <button id="focusClose">Close</button>
   </div>
 </div>
 
 <div id="users" class="modal"><div class="box">
   <div style="display:flex;align-items:center;gap:10px"><h2 style="flex:1">Users</h2><button id="usersClose">Close</button></div>
-  <table id="usersTable"><thead><tr><th>User</th><th>Role</th><th>Phones</th><th></th></tr></thead><tbody></tbody></table>
+  <table id="usersTable"><thead><tr><th>User</th><th>Role</th><th>Phones</th><th>Daily target</th><th></th></tr></thead><tbody></tbody></table>
   <h3>Add or update a user</h3>
   <div class="row" style="gap:8px">
-    <input type="text" id="uName" placeholder="username" style="width:140px">
-    <input type="text" id="uPw" placeholder="password (min. 10)" style="width:180px">
+    <input type="text" id="uName" placeholder="username" style="width:130px">
+    <input type="text" id="uPw" placeholder="password (min. 10)" style="width:170px">
     <label><input type="checkbox" id="uAdmin"> admin</label>
     <span id="uPhones"></span>
+  </div>
+  <div class="row" style="gap:8px;margin-top:8px">
+    <label>Daily target: <input type="number" id="uTexts" min="0" placeholder="comments" style="width:90px"> comments</label>
+    <label><input type="number" id="uMinutes" min="0" placeholder="minutes" style="width:90px"> minutes</label>
     <button id="uSave" class="primary">Save</button>
   </div>
   <div class="msg" id="uMsg"></div>
 </div></div>
 
+<div id="settings" class="modal"><div class="box">
+  <div style="display:flex;align-items:center;gap:10px"><h2 style="flex:1">Snippets &amp; notes</h2><button id="settingsClose">Close</button></div>
+  <h3>Global snippets (one per line, shown on every phone)</h3>
+  <textarea id="sGlobal"></textarea>
+  <div id="sPhones"></div>
+  <div class="row" style="margin-top:10px"><button id="sSave" class="primary">Save</button><span class="msg" id="sMsg"></span></div>
+</div></div>
+
 <div id="insights" class="modal"><div class="box">
-  <div style="display:flex;align-items:center;gap:10px"><h2 style="flex:1">Insights</h2><button id="insightsClose">Close</button></div>
+  <div style="display:flex;align-items:center;gap:10px"><h2 style="flex:1">Insights</h2><a href="/insights.csv"><button>Export CSV</button></a><button id="insightsClose">Close</button></div>
   <div class="tabs"><button class="on" data-range="today">Today</button><button data-range="week">7 days</button><button data-range="all">All time</button></div>
   <h3>Time per user and phone</h3>
-  <table id="insTable"><thead><tr><th>User</th><th>Phone</th><th class="num">Minutes</th><th class="num">Sessions</th><th class="num">Actions</th><th class="num">Likes</th><th>Last active</th></tr></thead><tbody></tbody></table>
-  <h3>Phones right now</h3>
+  <table id="insTable"><thead><tr><th>User</th><th>Phone</th><th class="num">Minutes</th><th class="num">Sessions</th><th class="num">Actions</th><th class="num">Comments</th><th class="num">Likes</th><th>Last active</th></tr></thead><tbody></tbody></table>
+  <h3>Minutes per day, last 30 days</h3>
+  <div class="hist" id="insHist"></div><div class="hist-legend" id="insLegend"></div>
+  <h3>Phones</h3>
   <div id="insPhones" style="font-size:13px"></div>
   <h3>Recent events</h3>
   <div class="log" id="insLog"></div>
@@ -117,26 +166,33 @@
 // ---------- helpers ----------
 const SWIPE_GAIN = 2.5;             // short drag on the tile becomes a long swipe on the phone
 const AUTO_MAX_MIN = 20;            // auto-scroll stops by itself after this many minutes
-const state = { devices: [], user: null, admin: false, focusId: null, auto: {} };
+const state = { devices: [], user: null, admin: false, focusId: null, auto: {}, settings: { snippets: { global: [], phone: {} }, notes: {}, labels: {}, targets: {}, apps: ['Instagram'] }, typing: false };
 const $ = (s, el = document) => el.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const post = (id, action, data) => fetch(`/cmd/${id}/${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data || {}) })
   .then(r => r.json()).then(j => { if (!j.ok) note(id, 'Error: ' + j.error); return j; }).catch(() => note(id, 'Error: no connection'));
 const note = (id, t) => document.querySelectorAll(`[data-id="${id}"] .msg`).forEach(m => { m.textContent = t; setTimeout(() => m.textContent === t && (m.textContent = ''), 3000); });
 const amplify = pts => { const s = pts[0], cl = v => Math.min(0.97, Math.max(0.03, v));
   return pts.map(p => ({ x: cl(s.x + (p.x - s.x) * SWIPE_GAIN), y: cl(s.y + (p.y - s.y) * SWIPE_GAIN), t: p.t })); };
 const fmtAgo = t => { if (!t) return ''; const m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'just now' : m < 60 ? m + ' min ago' : m < 1440 ? Math.round(m / 60) + ' h ago' : Math.round(m / 1440) + ' d ago'; };
+const rnd = (a, b) => a + Math.random() * (b - a);
+const backSwipe = () => [{ x: 0.01, y: 0.5, t: 0 }, { x: 0.25, y: 0.5, t: 120 }, { x: 0.55, y: 0.5, t: 260 }];
 
 // ---------- one phone view (used in the grid and in focus) ----------
 function phoneView(d, big) {
   const el = document.createElement('div');
   el.className = 'tile'; el.dataset.id = d.id;
+  const apps = state.settings.apps || ['Instagram'];
   el.innerHTML = `
-    <div class="head"><span class="dot"></span><b>${d.name}</b><span class="st">…</span>${big ? '' : '<button class="open" title="Open large">⤢</button>'}</div>
-    <div class="screen"><img src="/stream/${d.id}" alt="" draggable="false"><canvas></canvas></div>
+    <div class="head"><span class="dot"></span><b>${esc(d.name)}</b><span class="label"></span><span class="st">…</span>${big ? '' : '<button class="open small" title="Open large">⤢</button>'}</div>
+    <div class="note"></div>
+    <div class="screen"><img src="/stream/${d.id}" alt="" draggable="false"><canvas></canvas><span class="typing">typing…</span></div>
     <div class="row"><input type="text" placeholder="Type text, Enter sends" title="Shift+Click on the screen = double tap"><button class="send">Send</button></div>
-    <div class="row"><button class="home" title="Home (H)">Home</button><button class="ig" title="Instagram (I)">Instagram</button>
+    <div class="row"><button class="home" title="Home (H)">Home</button><button class="back" title="Back: swipe from the left edge (B)">Back</button>
+      ${apps.map(a => `<button class="app" data-app="${esc(a)}" title="Open ${esc(a)}">${esc(a)}</button>`).join('')}
+      <button class="shot" title="Save a screenshot (S)">📷</button>
       <button class="auto" title="Auto-scroll: swipes to the next reel every N seconds while this page is open. Any click on the screen stops it. (A)">Auto</button>
-      <input type="number" class="sec" min="3" max="60" value="8" title="Seconds per reel" style="width:58px"></div>
+      <input type="number" class="sec" min="3" max="60" value="8" title="Seconds per reel" style="width:56px"></div>
     <div class="msg"></div>`;
   const scr = $('.screen', el), img = $('img', el), inp = $('input[type=text]', el), cv = $('canvas', el);
   const norm = e => { const r = scr.getBoundingClientRect(); return { x: Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)), y: Math.min(1, Math.max(0, (e.clientY - r.top) / r.height)) }; };
@@ -159,13 +215,14 @@ function phoneView(d, big) {
   const fade = () => { trailAlpha -= 0.03; draw(); if (trailAlpha > 0) requestAnimationFrame(fade); else trail = []; };
   el.showTrail = p => { trail = p; trailAlpha = 1; draw(); setTimeout(fade, 250); };
 
-  // left button: click = tap, Shift+click or quick second click = double tap, drag = swipe along the path
-  let down = null, pathPts = [], lastTap = 0;
+  // left button: click = tap, Shift+click or quick second click = double tap, drag = swipe; right button held = long press
+  let down = null, pathPts = [], lastTap = 0, pressTimer = null;
   scr.addEventListener('contextmenu', e => e.preventDefault());
   scr.addEventListener('dragstart', e => e.preventDefault());
   scr.addEventListener('pointerdown', e => {
-    if (e.button !== 0) return;
     e.preventDefault(); stopAuto(d.id);
+    if (e.button === 2) { const p = norm(e); el.showTrail([p]); pressTimer = setTimeout(() => { pressTimer = null; post(d.id, 'press', { ...p, ms: 900 }); note(d.id, 'long press'); }, 150); return; }
+    if (e.button !== 0) return;
     down = { ...norm(e), t: Date.now() }; pathPts = [{ ...down, t: 0 }]; scr.setPointerCapture(e.pointerId);
     trail = [down]; trailAlpha = 1; draw();
   });
@@ -175,6 +232,7 @@ function phoneView(d, big) {
     if (p.t - pathPts[pathPts.length - 1].t >= 25) { pathPts.push(p); trail = amplify(pathPts); draw(); }
   });
   scr.addEventListener('pointerup', e => {
+    if (e.button === 2) { if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; } return; }
     if (e.button !== 0 || !down) return;
     const up = { ...norm(e), t: Date.now() - down.t }, start = down; down = null;
     pathPts.push(up);
@@ -190,17 +248,32 @@ function phoneView(d, big) {
   $('.send', el).onclick = send;
   inp.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') send(); });
   $('.home', el).onclick = () => post(d.id, 'home');
-  $('.ig', el).onclick = () => post(d.id, 'instagram');
+  $('.back', el).onclick = () => { el.showTrail(backSwipe()); post(d.id, 'swipe', { path: backSwipe() }); };
+  el.querySelectorAll('.app').forEach(b => b.onclick = () => post(d.id, 'launch', { app: b.dataset.app }));
+  $('.shot', el).onclick = () => saveShot(d, img);
   $('.auto', el).onclick = () => state.auto[d.id] ? stopAuto(d.id) : startAuto(d.id, +$('.sec', el).value);
   if (!big) { $('.open', el).onclick = () => openFocus(d.id); $('b', el).style.cursor = 'pointer'; $('b', el).onclick = () => openFocus(d.id); }
   img.onerror = () => { img.style.visibility = 'hidden'; setTimeout(() => img.src = `/stream/${d.id}?${Date.now()}`, 5000); };
   img.onload = () => img.style.visibility = '';
+  el.decorate = () => {
+    $('.label', el).textContent = state.settings.labels[d.id] || '';
+    $('.note', el).textContent = state.settings.notes[d.id] || '';
+    $('.note', el).style.display = state.settings.notes[d.id] ? '' : 'none';
+  };
+  el.decorate();
   return el;
+}
+
+// save the current frame of the stream as a PNG file
+function saveShot(d, img) {
+  if (!img.naturalWidth) return note(d.id, 'no image yet');
+  const c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight; c.getContext('2d').drawImage(img, 0, 0);
+  const a = document.createElement('a'); a.download = `${d.name.replace(/\s+/g, '-')}-${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}.png`; a.href = c.toDataURL('image/png'); a.click();
+  note(d.id, 'screenshot saved');
 }
 
 // ---------- auto-scroll (only while the page is open; any manual action on that phone stops it) ----------
 // every swipe is a little different: start point, length, slight curve and speed vary like a thumb would
-const rnd = (a, b) => a + Math.random() * (b - a);
 function autoSwipe() {
   const x0 = rnd(0.35, 0.65), y0 = rnd(0.7, 0.85), len = rnd(0.5, 0.65), drift = rnd(-0.06, 0.06), bend = rnd(-0.04, 0.04), total = rnd(180, 320);
   const n = 5 + Math.floor(rnd(0, 4)), pts = [];
@@ -226,62 +299,96 @@ function stopAuto(id) {
   document.querySelectorAll(`[data-id="${id}"] .auto`).forEach(b => { b.classList.remove('on'); b.textContent = 'Auto'; });
 }
 document.addEventListener('visibilitychange', () => document.hidden && Object.keys(state.auto).forEach(id => stopAuto(+id)));
+$('#autoAll').onclick = () => state.devices.filter(d => d.ready && !d.lockedBy).forEach(d => startAuto(d.id, +$('#allSec').value));
+$('#stopAll').onclick = () => Object.keys(state.auto).forEach(id => stopAuto(+id));
 
-// ---------- focus view ----------
+// ---------- focus view with direct typing ----------
+let typeBuf = '', typeTimer = null;
+function flushTyping() { if (state.focusId == null || !typeBuf) return; const t = typeBuf; typeBuf = ''; post(state.focusId, 'keys', { text: t }); }
+function setTyping(on) {
+  state.typing = on; const tm = $('#typemode'); tm.classList.toggle('on', on); tm.innerHTML = `Direct typing: ${on ? 'on' : 'off'} <span class="kbd">T</span>`;
+  document.querySelectorAll('#focusTile .typing').forEach(s => s.style.display = on ? '' : 'none');
+}
 function openFocus(id) {
   const d = state.devices.find(x => x.id === id); if (!d) return;
-  state.focusId = id;
+  if (state.focusId != null && state.focusId !== id) post(state.focusId, 'quality', { level: streamLevel() });
+  flushTyping(); state.focusId = id;
   const holder = $('#focusTile'); holder.innerHTML = ''; holder.appendChild(phoneView(d, true));
-  $('#focusPhones').innerHTML = state.devices.map(x => `<button data-f="${x.id}" class="${x.id === id ? 'on' : ''}">${x.name}</button>`).join('');
+  $('#focusPhones').innerHTML = state.devices.map(x => `<button data-f="${x.id}" class="${x.id === id ? 'on' : ''}">${esc(x.name)}</button>`).join('');
   $('#focusPhones').querySelectorAll('button').forEach(b => b.onclick = () => openFocus(+b.dataset.f));
-  $('#focus').classList.add('open'); refreshStatus();
+  const snips = [...(state.settings.snippets.global || []), ...((state.settings.snippets.phone || {})[id] || [])];
+  $('#focusSnippets').innerHTML = snips.length ? snips.map(s => `<button title="${esc(s)}">${esc(s)}</button>`).join('') : '<span style="color:var(--muted);font-size:12px">none yet</span>';
+  $('#focusSnippets').querySelectorAll('button').forEach((b, i) => b.onclick = () => { post(id, 'text', { text: snips[i] }); note(id, 'snippet sent'); });
+  $('#focus').classList.add('open'); setTyping(state.typing); refreshStatus();
   // the phone in focus streams larger and faster, everything else uses the chosen stream level
-  state.devices.forEach(x => post(x.id, 'quality', { level: x.id === id ? 'focus' : streamLevel() }));
+  post(id, 'quality', { level: 'focus' });
 }
-function closeFocus() { if (state.focusId != null) post(state.focusId, 'quality', { level: streamLevel() }); state.focusId = null; $('#focus').classList.remove('open'); $('#focusTile').innerHTML = ''; }
+function closeFocus() { flushTyping(); if (state.focusId != null) post(state.focusId, 'quality', { level: streamLevel() }); state.focusId = null; $('#focus').classList.remove('open'); $('#focusTile').innerHTML = ''; }
 $('#focusClose').onclick = closeFocus;
 $('#focus').addEventListener('click', e => { if (e.target === $('#focus')) closeFocus(); });
 document.addEventListener('keydown', e => {
-  if (e.target.tagName === 'INPUT') return;
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
   const modal = $('.modal.open'); if (modal) { if (e.key === 'Escape') modal.classList.remove('open'); return; }
   if (state.focusId == null) return;
-  const i = state.devices.findIndex(x => x.id === state.focusId), k = e.key.toLowerCase();
-  if (e.key === 'Escape') closeFocus();
-  else if (e.key === 'ArrowLeft' && i > 0) openFocus(state.devices[i - 1].id);
+  if (e.key === 'Escape') { if (state.typing) setTyping(false); else closeFocus(); return; }
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  if (state.typing) {
+    // everything goes to the phone: characters, Backspace, Enter. Keys are collected for 120 ms and sent together.
+    let ch = null;
+    if (e.key.length === 1) ch = e.key; else if (e.key === 'Backspace') ch = '\b'; else if (e.key === 'Enter') ch = '\n'; else if (e.key === 'Tab') ch = '\t';
+    if (ch === null) return;
+    e.preventDefault(); typeBuf += ch; clearTimeout(typeTimer); typeTimer = setTimeout(flushTyping, 120); return;
+  }
+  const i = state.devices.findIndex(x => x.id === state.focusId), k = e.key.toLowerCase(), tile = $('#focusTile .tile');
+  if (e.key === 'ArrowLeft' && i > 0) openFocus(state.devices[i - 1].id);
   else if (e.key === 'ArrowRight' && i < state.devices.length - 1) openFocus(state.devices[i + 1].id);
   else if (k === 'h') post(state.focusId, 'home');
-  else if (k === 'i') post(state.focusId, 'instagram');
-  else if (k === 'a') $('#focusTile .auto').click();
+  else if (k === 'i') post(state.focusId, 'launch', { app: 'Instagram' });
+  else if (k === 'b') $('.back', tile).click();
+  else if (k === 'a') $('.auto', tile).click();
+  else if (k === 's') $('.shot', tile).click();
+  else if (k === 't') setTyping(true);
 });
+$('#typemode').onclick = () => setTyping(!state.typing);
 
-// ---------- insights (admins) ----------
-let insRange = 'today', insData = null;
-async function openInsights() {
-  $('#insights').classList.add('open');
-  insData = await fetch('/insights').then(r => r.json());
-  renderInsights();
+// ---------- settings: snippets, notes, labels (admins) ----------
+async function loadSettings() { state.settings = await fetch('/settings').then(r => r.json()).catch(() => state.settings); document.querySelectorAll('.tile').forEach(t => t.decorate && t.decorate()); }
+async function openSettings() {
+  await loadSettings(); const st = state.settings;
+  $('#sGlobal').value = (st.snippets.global || []).join('\n');
+  $('#sPhones').innerHTML = state.devices.map(d => `<h3>${esc(d.name)}</h3>
+    <div class="row"><label>Label <input type="text" class="sLabel" data-id="${d.id}" value="${esc(st.labels[d.id] || '')}" placeholder="e.g. account name" style="width:200px"></label>
+    <label style="flex:1">Note <input type="text" class="sNote" data-id="${d.id}" value="${esc(st.notes[d.id] || '')}" placeholder="shown on the tile" style="width:100%"></label></div>
+    <textarea class="sPhone" data-id="${d.id}" placeholder="snippets for this phone, one per line">${esc(((st.snippets.phone || {})[d.id] || []).join('\n'))}</textarea>`).join('');
+  $('#settings').classList.add('open');
 }
-function renderInsights() {
-  if (!insData) return;
-  const rows = insData[insRange] || [];
-  $('#insTable tbody').innerHTML = rows.length ? rows.map(r => `<tr><td>${r.user}</td><td>${r.phone}</td><td class="num">${r.minutes}</td><td class="num">${r.sessions}</td><td class="num">${r.actions}</td><td class="num">${r.likes}</td><td>${fmtAgo(r.last)}</td></tr>`).join('')
-    : '<tr><td colspan="7" style="color:var(--muted)">No activity in this range</td></tr>';
-  $('#insPhones').innerHTML = insData.devices.map(d => `<span style="margin-right:14px"><span class="dot ${d.ready ? 'on' : ''}" style="display:inline-block;margin-right:5px"></span>${d.name}${d.lockedBy ? ` <span class="lock">in use by ${d.lockedBy}</span>` : ''}</span>`).join('');
-  $('#insLog').textContent = insData.recent.map(e => `${e.time.replace('T', ' ').slice(0, 19)}  ${e.user.padEnd(10)}  ${e.text}`).join('\n');
-}
-$('#insightsBtn').onclick = openInsights;
+$('#sSave').onclick = async () => {
+  const lines = v => v.split('\n').map(s => s.trim()).filter(Boolean);
+  const body = { snippets: { global: lines($('#sGlobal').value), phone: {} }, notes: {}, labels: {} };
+  document.querySelectorAll('.sPhone').forEach(t => { const l = lines(t.value); if (l.length) body.snippets.phone[t.dataset.id] = l; });
+  document.querySelectorAll('.sNote').forEach(t => { if (t.value.trim()) body.notes[t.dataset.id] = t.value.trim(); });
+  document.querySelectorAll('.sLabel').forEach(t => { if (t.value.trim()) body.labels[t.dataset.id] = t.value.trim(); });
+  const j = await fetch('/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(r => r.json());
+  $('#sMsg').textContent = j.ok ? 'Saved' : 'Error: ' + j.error; if (j.ok) loadSettings();
+};
+$('#settingsBtn').onclick = openSettings;
+$('#settingsClose').onclick = () => $('#settings').classList.remove('open');
 
 // ---------- user management (admins) ----------
 async function openUsers() {
   $('#users').classList.add('open'); $('#uMsg').textContent = '';
-  $('#uPhones').innerHTML = `<label><input type="checkbox" id="uAll" checked> all phones</label> ` + state.devices.map(d => `<label><input type="checkbox" class="uDev" value="${d.id}"> ${d.name}</label>`).join(' ');
+  await loadSettings();
+  $('#uPhones').innerHTML = `<label><input type="checkbox" id="uAll" checked> all phones</label> ` + state.devices.map(d => `<label><input type="checkbox" class="uDev" value="${d.id}"> ${esc(d.name)}</label>`).join(' ');
   $('#uAll').onchange = () => document.querySelectorAll('.uDev').forEach(c => c.disabled = $('#uAll').checked);
   $('#uAll').onchange();
   const list = await fetch('/users').then(r => r.json());
-  $('#usersTable tbody').innerHTML = list.map(u => `<tr><td>${u.name}</td><td>${u.admin ? 'admin' : 'VA'}</td><td>${u.admin || u.devices === 'all' ? 'all' : u.devices.map(i => (state.devices.find(d => d.id === i) || { name: '#' + i }).name).join(', ') || 'none'}</td>
-    <td style="text-align:right"><button data-edit="${u.name}">Edit</button> <button class="danger" data-del="${u.name}">Remove</button></td></tr>`).join('');
+  const tg = state.settings.targets || {};
+  $('#usersTable tbody').innerHTML = list.map(u => `<tr><td>${esc(u.name)}</td><td>${u.admin ? 'admin' : 'VA'}</td><td>${u.admin || u.devices === 'all' ? 'all' : u.devices.map(i => (state.devices.find(d => d.id === i) || { name: '#' + i }).name).join(', ') || 'none'}</td>
+    <td>${tg[u.name] ? [tg[u.name].texts ? tg[u.name].texts + ' comments' : '', tg[u.name].minutes ? tg[u.name].minutes + ' min' : ''].filter(Boolean).join(', ') : ''}</td>
+    <td style="text-align:right"><button class="small" data-edit="${esc(u.name)}">Edit</button> <button class="small danger" data-del="${esc(u.name)}">Remove</button></td></tr>`).join('');
   $('#usersTable').querySelectorAll('[data-edit]').forEach(b => b.onclick = () => { const u = list.find(x => x.name === b.dataset.edit); $('#uName').value = u.name; $('#uPw').value = ''; $('#uAdmin').checked = u.admin;
-    $('#uAll').checked = u.devices === 'all'; $('#uAll').onchange(); document.querySelectorAll('.uDev').forEach(c => c.checked = u.devices !== 'all' && u.devices.includes(+c.value)); $('#uMsg').textContent = `Editing ${u.name}: leave the password empty to keep it`; });
+    $('#uAll').checked = u.admin || u.devices === 'all'; $('#uAll').onchange(); document.querySelectorAll('.uDev').forEach(c => c.checked = u.devices !== 'all' && Array.isArray(u.devices) && u.devices.includes(+c.value));
+    $('#uTexts').value = (tg[u.name] || {}).texts || ''; $('#uMinutes').value = (tg[u.name] || {}).minutes || ''; $('#uMsg').textContent = `Editing ${u.name}: leave the password empty to keep it`; });
   $('#usersTable').querySelectorAll('[data-del]').forEach(b => b.onclick = async () => { if (!confirm(`Remove user ${b.dataset.del}?`)) return;
     const j = await fetch('/users', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: b.dataset.del }) }).then(r => r.json()); $('#uMsg').textContent = j.ok ? `Removed ${b.dataset.del}` : 'Error: ' + j.error; if (j.ok) openUsers(); });
 }
@@ -289,11 +396,33 @@ $('#uSave').onclick = async () => {
   const body = { name: $('#uName').value, admin: $('#uAdmin').checked, devices: $('#uAll').checked ? 'all' : [...document.querySelectorAll('.uDev:checked')].map(c => +c.value) };
   if ($('#uPw').value) body.pw = $('#uPw').value;
   const j = await fetch('/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(r => r.json());
+  if (j.ok) {
+    const targets = { ...(state.settings.targets || {}) }, t = { texts: +$('#uTexts').value || 0, minutes: +$('#uMinutes').value || 0 };
+    if (t.texts || t.minutes) targets[j.user.name] = t; else delete targets[j.user.name];
+    await fetch('/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ targets }) });
+  }
   $('#uMsg').textContent = j.ok ? `Saved ${j.user.name}` : 'Error: ' + j.error;
-  if (j.ok) { $('#uName').value = ''; $('#uPw').value = ''; openUsers(); }
+  if (j.ok) { $('#uName').value = ''; $('#uPw').value = ''; $('#uTexts').value = ''; $('#uMinutes').value = ''; openUsers(); }
 };
 $('#usersBtn').onclick = openUsers;
 $('#usersClose').onclick = () => $('#users').classList.remove('open');
+
+// ---------- insights (admins) ----------
+let insRange = 'today', insData = null;
+const COLORS = ['#4af', '#3c3', '#e94', '#c6f', '#f66', '#6ee', '#fc6', '#9f9'];
+async function openInsights() { $('#insights').classList.add('open'); insData = await fetch('/insights').then(r => r.json()); renderInsights(); }
+function renderInsights() {
+  if (!insData) return;
+  const rows = insData[insRange] || [];
+  $('#insTable tbody').innerHTML = rows.length ? rows.map(r => `<tr><td>${esc(r.user)}</td><td>${esc(r.phone)}</td><td class="num">${r.minutes}</td><td class="num">${r.sessions}</td><td class="num">${r.actions}</td><td class="num">${r.texts || 0}</td><td class="num">${r.likes}</td><td>${fmtAgo(r.last)}</td></tr>`).join('')
+    : '<tr><td colspan="8" style="color:var(--muted)">No activity in this range</td></tr>';
+  const users = [...new Set(insData.history.flatMap(h => Object.keys(h.users)))], max = Math.max(1, ...insData.history.map(h => Object.values(h.users).reduce((a, b) => a + b, 0)));
+  $('#insHist').innerHTML = insData.history.map(h => `<div class="col" title="${h.day}: ${Object.entries(h.users).map(([u, m]) => u + ' ' + m + ' min').join(', ')}">${users.map((u, i) => h.users[u] ? `<div class="seg" style="height:${h.users[u] / max * 100}%;background:${COLORS[i % COLORS.length]}"></div>` : '').join('')}</div>`).join('') || '<span style="color:var(--muted);font-size:12px">no data yet</span>';
+  $('#insLegend').innerHTML = users.map((u, i) => `<span><i class="sw" style="background:${COLORS[i % COLORS.length]}"></i>${esc(u)}</span>`).join('');
+  $('#insPhones').innerHTML = insData.devices.map(d => `<span style="margin-right:14px"><span class="dot ${d.ready ? 'on' : ''}" style="display:inline-block;margin-right:5px"></span>${esc(d.name)}${d.lockedBy ? ` <span class="lock">in use by ${esc(d.lockedBy)}</span>` : ''}</span>`).join('');
+  $('#insLog').textContent = insData.recent.map(e => `${e.time.replace('T', ' ').slice(0, 19)}  ${e.user.padEnd(10)}  ${e.text}`).join('\n');
+}
+$('#insightsBtn').onclick = openInsights;
 $('#insightsClose').onclick = () => $('#insights').classList.remove('open');
 $('#insights .tabs').querySelectorAll('button').forEach(b => b.onclick = () => { insRange = b.dataset.range; $('#insights .tabs .on')?.classList.remove('on'); b.classList.add('on'); renderInsights(); });
 
@@ -304,30 +433,52 @@ let levelApplied = false;
 $('#quality').onchange = () => { try { localStorage.setItem('streamLevel', streamLevel()); } catch {} applyLevel(); };
 function applyLevel() { state.devices.forEach(x => { if (x.ready && x.id !== state.focusId) post(x.id, 'quality', { level: streamLevel() }); }); }
 
+// ---------- own stats in the bar (every user) ----------
+async function refreshMe() {
+  const m = await fetch('/me').then(r => r.ok ? r.json() : null).catch(() => null); if (!m) return;
+  const t = m.target || {};
+  const bar = (v, max) => max ? `<span class="bar"><i style="width:${Math.min(100, v / max * 100)}%"></i></span>${v}/${max}` : v;
+  $('#me').innerHTML = `today: ${bar(m.texts, t.texts)} comments · ${bar(m.minutes, t.minutes)} min · ${m.likes} likes`;
+}
+
 // ---------- status refresh ----------
 let statusCache = [];
+function health(d) {
+  const parts = [];
+  if (d.ios) parts.push('iOS ' + d.ios);
+  if (d.battery != null) parts.push(`battery ${d.battery}%`);
+  if (d.ready && d.uptimeMin != null) parts.push(`up ${d.uptimeMin} min`);
+  if (!d.ready && d.offlineMin != null) parts.push(`<span class="warn">offline for ${d.offlineMin} min</span>`);
+  return parts.join(' · ');
+}
 function refreshStatus() {
   for (const d of statusCache) document.querySelectorAll(`[data-id="${d.id}"]`).forEach(el => {
-    el.classList.toggle('locked', !!d.lockedBy);
+    el.classList.toggle('locked', !!d.lockedBy); el.classList.toggle('offline', !d.ready);
     $('.dot', el).classList.toggle('on', d.ready);
     const stream = $('img', el).naturalWidth > 0;
-    $('.st', el).textContent = (d.ready ? 'ready' : d.running ? 'starting' : 'offline') + (stream ? '' : ', no stream') + (d.battery != null ? `, ${d.battery}%` : '');
-    if (d.lockedBy) $('.msg', el).innerHTML = `<span class="lock">in use by ${d.lockedBy}</span>`;
+    const off = !d.ready && d.offlineMin >= 5 ? ` offline ${d.offlineMin} min` : '';
+    $('.st', el).textContent = (d.ready ? 'ready' : d.running ? 'starting' : 'offline') + off + (stream ? '' : ', no stream') + (d.battery != null ? `, ${d.battery}%` : '');
+    $('.st', el).style.color = off ? 'var(--warn)' : '';
+    if (d.lockedBy) $('.msg', el).innerHTML = `<span class="lock">in use by ${esc(d.lockedBy)}</span>`;
     else if ($('.msg', el).querySelector('.lock')) $('.msg', el).textContent = '';
   });
+  if (state.focusId != null) { const d = statusCache.find(x => x.id === state.focusId); if (d) $('#focusHealth').innerHTML = health(d) + (state.admin ? ` · <button class="small danger" onclick="rebootPhone(${d.id})">Reboot phone</button>` : ''); }
 }
+function rebootPhone(id) { if (confirm('Reboot this phone? It will be offline for about a minute.')) post(id, 'reboot').then(j => j && j.ok && note(id, 'rebooting')); }
 async function refresh() {
   const r = await fetch('/devices').catch(() => null);
   if (!r) return; if (r.status === 401) return location.href = '/login';
   const { user, admin, devices } = await r.json();
+  const first = !state.user;
   state.user = user; state.admin = admin; state.devices = devices; statusCache = devices;
-  $('#who').textContent = `signed in as ${user}${admin ? ' (admin)' : ''}`;
-  $('#insightsBtn').style.display = admin ? '' : 'none'; $('#usersBtn').style.display = admin ? '' : 'none';
+  $('#who').textContent = `${user}${admin ? ' (admin)' : ''}`;
+  for (const id of ['insightsBtn', 'usersBtn', 'settingsBtn']) $('#' + id).style.display = admin ? '' : 'none';
+  if (first) await loadSettings();
   for (const d of devices) if (!$(`#grid [data-id="${d.id}"]`)) $('#grid').appendChild(phoneView(d, false));
   refreshStatus();
   if (!levelApplied && devices.some(d => d.ready) && streamLevel() !== 'normal') { levelApplied = true; applyLevel(); }
 }
-refresh(); setInterval(refresh, 5000);
+refresh(); setInterval(refresh, 5000); refreshMe(); setInterval(refreshMe, 30000); setInterval(loadSettings, 60000);
 </script>
 </body>
 </html>

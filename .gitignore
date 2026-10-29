@@ -11,3 +11,4 @@ wda/
 bin/
 selfIdentity.plist
 users.json
+settings.json

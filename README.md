@@ -120,11 +120,15 @@ Einmal im Jahr (neue Signatur) muss "Installieren" kurz wieder erlaubt werden, d
 
 FileVault an, Firewall an (geprüft am 28.10.2026). Automatische Anmeldung nur, wenn der Mac physisch sicher steht.
 
-## Bedienung der Kachel
+## Bedienung (Oberfläche auf Englisch)
 
-- Klick = tippen. Shift+Klick = Doppeltipp (Like). Linke Taste gedrückt ziehen = wischen entlang der Mausspur, mit Leuchtspur.
-- Textfeld + Enter tippt in das Feld, das auf dem iPhone den Fokus hat.
-- Knöpfe: Home, Instagram, Groß.
+- Raster aller Handys, Klick auf den Namen öffnet den Focus (groß, Tastenkürzel, Snippets, direktes Tippen mit T).
+- Klick = tippen, Shift+Klick = Doppeltipp (Like), Rechtsklick halten = langer Druck, Ziehen = wischen mit Leuchtspur, Back = Wisch vom linken Rand.
+- Auto-scroll je Handy oder für alle (Start/Stop in der Leiste), stoppt bei jedem Klick ins Bild, nach 20 min und beim Tab-Wechsel.
+- Stream-Stufe Light/Normal/Smooth je Browser, das Handy im Focus läuft immer flüssig.
+- Admin: Users (Benutzer, Handys, Tagesziele), Snippets & notes (Textbausteine global und je Handy, Beschriftung, Notiz), Insights (Zeit je Benutzer und Handy, 30-Tage-Verlauf, CSV-Export, Ereignisse), Reboot je Handy im Focus.
+- Jeder sieht in der Leiste seine Tageswerte und Ziele. Apps in devices.json unter "apps" (Name: Bundle-ID).
+- settings.json (Snippets, Notizen, Ziele) und users.json bleiben beim App-Update erhalten.
 
 ## Grenzen
 

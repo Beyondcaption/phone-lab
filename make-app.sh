@@ -35,7 +35,7 @@ mkdir -p "$D"
 # Sicherung der alten Programmdateien für einen Rückschritt
 [[ -f "$D/VERSION" ]] && rm -rf "$D.vorher" && rsync -a --exclude logs --exclude users.json "$D/" "$D.vorher/"
 # Programmdateien ersetzen, Benutzer, Logs, Schlüssel und Pairings bleiben
-rsync -a --exclude users.json --exclude logs --exclude .env --exclude selfIdentity.plist --exclude wda.zip --exclude devimages.zip "$P/" "$D/"
+rsync -a --exclude users.json --exclude settings.json --exclude logs --exclude .env --exclude selfIdentity.plist --exclude wda.zip --exclude devimages.zip "$P/" "$D/"
 rm -rf "$D/wda" "$D/devimages"; ditto -x -k "$P/wda.zip" "$D/wda"; ditto -x -k "$P/devimages.zip" "$D/devimages"
 chmod +x "$D"/*.sh "$D"/*.command "$D"/bin/* "$D"/*.js
 xattr -dr com.apple.quarantine "$D" 2>/dev/null || true

@@ -37,5 +37,10 @@
       "wda_port": 8105,
       "mjpeg_port": 9105
     }
-  ]
+  ],
+  "apps": {
+    "Instagram": "com.burbn.instagram",
+    "TikTok": "com.zhiliaoapp.musically",
+    "Threads": "com.burbn.barcelona"
+  }
 }
