@@ -55,7 +55,7 @@ Passwort (oder übernimmt Benutzer, Einstellungen und Logs aus einer älteren In
 richtet den Autostart ein, startet die Tailscale-Freigabe, wenn Tailscale installiert ist, und öffnet das Dashboard.
 
 Daten liegen unter ~/Library/Application Support/phone-lab (users.json, settings.json, logs, devimages, Pairing). Update: neue DMG,
-App im Programme-Ordner ersetzen, einmal doppelklicken. Die App läuft als Hintergrunddienst (kein Dock-Symbol), Doppelklick öffnet nur das Dashboard.
+App im Programme-Ordner ersetzen, einmal doppelklicken. Die App läuft als Hintergrunddienst (kein Dock-Symbol), Doppelklick öffnet nur das Dashboard, im Fenster von phone-lab Desk, wenn die App installiert ist, sonst im Browser.
 
 ## Aktualisieren von Hand
 

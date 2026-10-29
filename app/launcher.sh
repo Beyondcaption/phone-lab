@@ -41,5 +41,6 @@ launchctl bootstrap "gui/$(id -u)" "$PL" >> "$DATA/logs/app.log" 2>&1
 TS=/Applications/Tailscale.app/Contents/MacOS/Tailscale
 if [[ -x "$TS" ]] && "$TS" serve status 2>&1 | grep -q "No serve config"; then ("$TS" serve --bg 3000 >> "$DATA/logs/app.log" 2>&1 &); fi
 for i in {1..40}; do curl -s -o /dev/null http://127.0.0.1:3000/ && break; sleep 1; done
-open "http://127.0.0.1:3000"
+# Dashboard im eigenen Fenster, wenn phone-lab Desk installiert ist, sonst im Browser
+if [[ -d "/Applications/phone-lab Desk.app" ]]; then open -a "phone-lab Desk"; else open "http://127.0.0.1:3000"; fi
 osascript -e "display notification \"Version $VER is running. Phones connect over USB.\" with title \"phone-lab\"" >/dev/null 2>&1
