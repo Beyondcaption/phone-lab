@@ -147,9 +147,9 @@ function create(api) {
     const c = dev.claude = { abort: null, since: Date.now(), minutes, reels: 0, fitting: 0, cost: 0 };
     const stats = { pausen: 0, zurueck: 0 };
     const end = Date.now() + minutes * rnd(0.9, 1.1) * 60000;
-    const x = fn => { if (c.abort) throw new Error(c.abort); dev.lockedBy = 'claude'; dev.lockAt = Date.now(); return api.exec(dev, fn); };
+    const x = (fn, label = 'claude') => { if (c.abort) throw new Error(c.abort); dev.lockedBy = 'claude'; dev.lockAt = Date.now(); return api.exec(dev, fn, label); };
     const wait = async ms => { const until = Date.now() + ms; while (Date.now() < until) { if (c.abort) throw new Error(c.abort); await sleep(Math.min(1000, until - Date.now())); } };
-    const screenText = () => x(() => api.withSession(dev, sid => api.wda(dev, 'GET', `/session/${sid}/source?format=xml`, undefined, 30000))).then(r => r.value || '');
+    const screenText = () => x(() => api.withSession(dev, sid => api.wda(dev, 'GET', `/session/${sid}/source?format=xml`, undefined, 12000)), 'claude screen text').then(r => r.value || '');
     let reason = 'time up';
     if (entry) { entry.status = 'running'; save(); }
     api.protokoll('claude', `${dev.name} warmup session ${minutes} min`);
@@ -207,15 +207,8 @@ function create(api) {
       runSession(dev, e.minutes, e);
     }
     save();
-    // Wächter: während eine VA bedient, höchstens einmal je Minute den Bildschirmtext prüfen, nur in einer Tipp-Pause von 3 s
-    for (const dev of api.devices) {
-      if (!dev.ready || dev.claude || st.alerts[dev.id] || !dev.lockedBy || dev.lockedBy === 'claude') continue;
-      const idle = Date.now() - (dev.lastCmd || 0);
-      if (idle > 120000 || idle < 3000 || dev.pending || Date.now() - (dev.lastWatch || 0) < 60000) continue;
-      dev.lastWatch = Date.now();
-      api.exec(dev, () => api.withSession(dev, sid => api.wda(dev, 'GET', `/session/${sid}/source?format=xml`, undefined, 20000)))
-        .then(r => { if (STOP_WORDS.test(r.value || '')) alert(dev, 'stop word on screen while ' + dev.lockedBy + ' was working', 'watch'); }).catch(() => {});
-    }
+    // Kein Wächter während eine VA bedient: der Bildschirmtext von Instagram braucht auf dem iPhone viele Sekunden und hielt
+    // in der Zeit jede Eingabe der VA in der Warteschlange fest (Focus ließ sich nicht mehr wischen). Die VA sieht den Bildschirm selbst.
   }
   setInterval(() => tick().catch(e => console.log('warmup tick:', e.message)), 30000);
   setTimeout(() => tick().catch(() => {}), 5000);

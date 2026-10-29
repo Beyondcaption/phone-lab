@@ -109,11 +109,23 @@ async function withSession(dev, fn) {
 
 // Warteschlange je Handy: XCTest verarbeitet ohnehin nur eine Eingabe nach der anderen. Parallele Aufrufe stauen sich
 // sonst in WDA und kommen verspätet und in falscher Reihenfolge an. dev.pending zählt, was noch wartet.
-function exec(dev, fn) {
+// label sagt im Log, was gerade läuft. maxWait (ms): kommt der Aufruf so lange nicht dran, wird er verworfen statt später
+// verspätet ausgeführt (ein Wisch von vor 8 s ist falsch), und der Mensch bekommt sofort eine Meldung.
+function exec(dev, fn, label = 'call', maxWait = 0) {
   dev.pending = (dev.pending || 0) + 1;
-  const run = (dev.q || Promise.resolve()).then(() => { dev.lastCmd = Date.now(); return fn(); });
-  dev.q = run.catch(() => {}).finally(() => { dev.pending--; dev.lastCmd = Date.now(); });
-  return run;
+  const queued = Date.now(); let started = false, cancelled = false;
+  const run = (dev.q || Promise.resolve()).then(() => {
+    if (cancelled) throw new Error('cancelled');
+    started = true;
+    const waited = Date.now() - queued;
+    if (waited > 1500) console.log(`[${dev.name}] ${label} wartete ${waited} ms hinter ${dev.busyWith || '?'}`);
+    dev.busyWith = label; dev.lastCmd = Date.now(); return fn();
+  });
+  dev.q = run.catch(() => {}).finally(() => { dev.pending--; dev.busyWith = null; dev.lastCmd = Date.now(); });
+  if (!maxWait) return run;
+  return Promise.race([run, new Promise((_, reject) => setTimeout(() => {
+    if (!started) { cancelled = true; reject(new Error(`${dev.name} is busy (${dev.busyWith || 'previous command'}), try again`)); }
+  }, maxWait))]);
 }
 
 const touch = steps => ({ actions: [{ type: 'pointer', id: 'f1', parameters: { pointerType: 'touch' }, actions: steps }] });
@@ -227,7 +239,7 @@ async function health(dev) {
     dev.ready = !!r.value.ready; dev.fails = 0; if (dev.ready) { if (!dev.readySince) dev.readySince = Date.now(); dev.lastReady = Date.now(); }
     if (dev.ready && Date.now() - (dev.batteryAt || 0) > 60000) {   // Akku nur einmal je Minute, über die Warteschlange
       dev.batteryAt = Date.now();
-      const b = await exec(dev, () => withSession(dev, sid => wda(dev, 'GET', `/session/${sid}/wda/batteryInfo`, undefined, 3000))).catch(() => null);
+      const b = await exec(dev, () => withSession(dev, sid => wda(dev, 'GET', `/session/${sid}/wda/batteryInfo`, undefined, 3000)), 'battery').catch(() => null);
       if (b) dev.battery = b.value.level >= 0 ? Math.round(b.value.level * 100) : null;
     }
   } catch {
@@ -520,7 +532,7 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'POST' && route === 'cmd' && action === 'quality') {
     const b = await body(req);
     // auch über die Warteschlange, damit der Einstellungs-Aufruf nicht parallel zu einer Eingabe an WDA geht
-    try { await exec(dev, () => cmd.quality(dev, b)); return json(res, 200, { ok: true }); } catch (e) { return json(res, 502, { ok: false, error: e.message }); }
+    try { await exec(dev, () => cmd.quality(dev, b), 'quality ' + b.level, 8000); return json(res, 200, { ok: true }); } catch (e) { return json(res, 502, { ok: false, error: e.message }); }
   }
   if (req.method === 'POST' && route === 'cmd' && HTTP_CMDS.has(action)) {
     const b = await body(req);
@@ -532,7 +544,7 @@ const server = http.createServer(async (req, res) => {
     if (dev.lockedBy !== user.name) protokoll(user.name, ip, `takes over ${dev.name}`);
     dev.lockedBy = user.name; dev.lockAt = Date.now();
     protokoll(user.name, ip, `${dev.name} ${action}${action === 'text' ? ' (' + String(b.text || '').length + ' chars)' : ''}${action === 'keys' && String(b.text || '').includes('\n') ? ' (enter)' : ''}`);
-    try { await exec(dev, () => cmd[action](dev, b)); return json(res, 200, { ok: true }); }
+    try { await exec(dev, () => cmd[action](dev, b), `${action} by ${user.name}`, 8000); return json(res, 200, { ok: true }); }
     catch (e) { return json(res, 502, { ok: false, error: e.message }); }
   }
   json(res, 404, { error: 'not found' });

@@ -21,7 +21,7 @@ fs.writeFileSync(path.join(DATA, 'users.json'), JSON.stringify({ users: [mkUser(
 
 const procs = [];
 const start = (file, env) => { const p = spawn(process.execPath, [path.join(ROOT, file)], { env: { ...process.env, ...env }, stdio: ['ignore', 'pipe', 'pipe'] }); p.out = ''; p.stdout.on('data', d => p.out += d); p.stderr.on('data', d => p.out += d); procs.push(p); return p; };
-const fake = start('test/fake-wda.js', { FAKE_STOP: '3' });
+const fake = start('test/fake-wda.js', { FAKE_STOP: '3', FAKE_SLOW: '5' });
 const server = start('server.js', { PHONELAB_FAKE: '1', PHONELAB_DATA: DATA, ANTHROPIC_API_KEY: '' });
 
 let failed = 0;
@@ -98,6 +98,23 @@ const phone = async (a, id) => (await a.get('/devices')).devices.find(d => d.id 
     await sleep(5500);
     const p4 = await phone(admin, 4);
     ok(p4.warmup.done.likes === 2 && p4.warmup.done.comments === 2, 'Likes 2, Kommentare 2 auf Handy 4', p4.warmup.done);
+
+    // 6b Handy 5 braucht 10 s für den Bildschirmtext (echtes Instagram). Eine VA, die bedient und dann 5 s schaut,
+    // darf danach nicht hängen (früher hielt der Wächter genau dann die Warteschlange fest)
+    await va.post('/cmd/5/tap', { x: 0.5, y: 0.5 });
+    await sleep(35000);   // mehr als ein Planer-Takt mit Tipp-Pause
+    let t1 = Date.now(); const idleTap = await va.post('/cmd/5/swipe', { path: [{ x: 0.5, y: 0.8, t: 0 }, { x: 0.5, y: 0.2, t: 200 }] });
+    ok(idleTap.ok && Date.now() - t1 < 1500, 'Wisch nach Pause sofort ausgeführt', Date.now() - t1);
+    // Claude liest gerade den langsamen Bildschirmtext; ein Befehl, der nicht binnen 8 s drankommt, meldet "busy" und läuft nicht später
+    ok((await admin.post('/warmup/5/run', { minutes: 2 })).ok, 'Sitzung auf Handy 5 gestartet');
+    await sleep(8000);    // Claude: Instagram öffnen (2,5-5 s), Reels-Reiter, Pause (2-4 s), dann der 10-s-Bildschirmtext
+    t1 = Date.now(); const busy = await va.post('/cmd/5/tap', { x: 0.2, y: 0.2 });
+    ok(!busy.ok && /busy/.test(busy.error) && Date.now() - t1 < 9000, 'Befehl hinter langsamem Aufruf meldet busy nach höchstens 8 s', { ms: Date.now() - t1, busy });
+    await sleep(4000);
+    const late = (await stats(5)).actions.filter(a => a.t > t1 && a.kind === 'actions');
+    ok(late.length === 0, 'verworfener Tipp wurde nicht später ausgeführt', late.length);
+    ok((await va.post('/cmd/5/tap', { x: 0.2, y: 0.2 })).ok, 'nächster Tipp geht wieder durch');
+    ok(!(await phone(admin, 5)).warmup.claude, 'Claude hat Handy 5 abgegeben');
 
     // 7 Stream: Bilder kommen an, Insights rechnen
     const ctl = new AbortController(); let bytes = 0;

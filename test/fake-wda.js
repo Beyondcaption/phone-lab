@@ -11,6 +11,8 @@ const ROOT = path.join(__dirname, '..');
 const CFG = JSON.parse(fs.readFileSync(path.join(ROOT, 'devices.json'), 'utf8'));
 const STOP = String(process.env.FAKE_STOP || '').split(',').filter(Boolean).map(Number);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+// FAKE_SLOW=5: Handy 5 braucht 10 s für den Bildschirmtext, wie Instagram auf einem echten iPhone
+const SLOW = String(process.env.FAKE_SLOW || '').split(',').filter(Boolean).map(Number);
 
 for (const dev of CFG.devices) {
   const s = { calls: 0, maxParallel: 0, active: 0, actions: [], app: 'com.apple.springboard' };
@@ -27,6 +29,7 @@ for (const dev of CFG.devices) {
     if (u.endsWith('/appium/settings')) return send({});
     if (u.endsWith('/wda/batteryInfo')) return send({ level: 0.5 + dev.id / 20, state: 2 });
     if (u.endsWith('/wda/activeAppInfo')) return send({ bundleId: s.app });
+    if (u.includes('/source') && SLOW.includes(dev.id)) await sleep(10000);
     if (u.includes('/source')) return send(`<XCUIElementTypeApplication name="Instagram">${STOP.includes(dev.id) ? '<XCUIElementTypeStaticText label="We suspect automated behavior on your account"/>' : '<XCUIElementTypeStaticText label="Reels"/>'}</XCUIElementTypeApplication>`);
     if (u.endsWith('/element') && req.method === 'POST') { res.writeHead(404, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify({ value: { error: 'no such element' } })); }
     // Eingaben: dauern 150 ms, Parallelität wird gezählt
