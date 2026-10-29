@@ -17,10 +17,15 @@ const IOS = fs.existsSync(path.join(ROOT, 'bin', 'ios')) ? path.join(ROOT, 'bin'
 const WDA_APP = path.join(ROOT, 'wda', 'WebDriverAgentRunner-Runner.app');
 const BUNDLE = CFG.wda_bundle_id + '.xctrunner';
 // waitForIdleTimeout 0 und animationCoolOffTimeout 0: WDA wartet nicht auf Ruhe der App, Eingaben kommen sofort an
-// Stream klein halten, damit er auch über das Internet flüssig bleibt. Die JPEG-Qualität ignoriert WDA, wirksam sind Bildrate und Größe.
-// Raster: 6 Bilder/s bei 30 % (etwa 2 Mbit/s je Handy). Focus: 10 Bilder/s bei 45 % (etwa 7 Mbit/s), nur für das eine Handy, das groß offen ist.
-const QUALITY = { low: { mjpegServerFramerate: 6, mjpegScalingFactor: 30 }, high: { mjpegServerFramerate: 10, mjpegScalingFactor: 45 } };
-const SETTINGS = { ...QUALITY.low, waitForIdleTimeout: 0, animationCoolOffTimeout: 0 };
+// Stream-Stufen. Die JPEG-Qualität bringt wenig (Boden ~55 KB je Bild), wirksam sind Bildrate und Größe.
+// light ~2 Mbit/s je Handy, normal ~4, smooth ~9, focus ~12 (nur das eine Handy, das groß offen ist).
+const QUALITY = {
+  light:  { mjpegServerFramerate: 6,  mjpegScalingFactor: 30, mjpegServerScreenshotQuality: 25 },
+  normal: { mjpegServerFramerate: 8,  mjpegScalingFactor: 35, mjpegServerScreenshotQuality: 25 },
+  smooth: { mjpegServerFramerate: 12, mjpegScalingFactor: 45, mjpegServerScreenshotQuality: 25 },
+  focus:  { mjpegServerFramerate: 15, mjpegScalingFactor: 50, mjpegServerScreenshotQuality: 25 },
+};
+const SETTINGS = { ...QUALITY.normal, waitForIdleTimeout: 0, animationCoolOffTimeout: 0 };
 
 fs.mkdirSync(path.join(ROOT, 'logs'), { recursive: true });
 const logFile = name => fs.openSync(path.join(ROOT, 'logs', name), 'a');
@@ -107,7 +112,7 @@ const cmd = {
   },
   text: (dev, { text }) => withSession(dev, sid => wda(dev, 'POST', `/session/${sid}/wda/keys`, { value: [String(text)] })),
   home: dev => wda(dev, 'POST', '/wda/homescreen'),
-  quality: (dev, { level }) => withSession(dev, sid => wda(dev, 'POST', `/session/${sid}/appium/settings`, { settings: QUALITY[level] || QUALITY.low })),
+  quality: (dev, { level }) => withSession(dev, sid => wda(dev, 'POST', `/session/${sid}/appium/settings`, { settings: QUALITY[level] || QUALITY.normal })),
   instagram: dev => withSession(dev, sid => wda(dev, 'POST', `/session/${sid}/wda/apps/launch`, { bundleId: INSTAGRAM })),
 };
 
