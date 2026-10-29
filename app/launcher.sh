@@ -10,7 +10,14 @@ DATA="${PHONELAB_DATA:-$HOME/Library/Application Support/phone-lab}"; mkdir -p "
 # Umzug von einer älteren Installation (Ordner phone-lab mit users.json)
 if [[ ! -f "$DATA/users.json" ]]; then
   for OLD in ~/phone-lab ~/Desktop/phone-lab; do
-    if [[ -f "$OLD/users.json" ]]; then cp "$OLD/users.json" "$DATA/"; [[ -f "$OLD/settings.json" ]] && cp "$OLD/settings.json" "$DATA/"; [[ -d "$OLD/logs" ]] && cp -R "$OLD/logs/." "$DATA/logs/"; break; fi
+    if [[ -f "$OLD/users.json" ]]; then
+      cp "$OLD/users.json" "$DATA/"; [[ -f "$OLD/settings.json" ]] && cp "$OLD/settings.json" "$DATA/"; [[ -d "$OLD/logs" ]] && cp -R "$OLD/logs/." "$DATA/logs/"
+      # Pairing zu den iPhones und Entwicklerbilder mitnehmen, sonst fragen die Handys erneut nach Vertrauen
+      [[ -f "$OLD/selfIdentity.plist" ]] && cp "$OLD/selfIdentity.plist" "$DATA/"; [[ -d "$OLD/devimages" && ! -d "$DATA/devimages" ]] && cp -R "$OLD/devimages" "$DATA/devimages"
+      # alten Dienst aus dem Ordner beenden, die App übernimmt
+      launchctl bootout "gui/$(id -u)/com.phonelab.server" >/dev/null 2>&1; pkill -f "$OLD/server.js" >/dev/null 2>&1
+      break
+    fi
   done
 fi
 # Erster Start: Admin anlegen
