@@ -149,6 +149,15 @@ FileVault an, Firewall an (geprüft am 28.10.2026). Automatische Anmeldung nur, 
 - Mac, erster Start der unsignierten App: Systemeinstellungen > Datenschutz & Sicherheit > "Dennoch öffnen", oder `xattr -dr com.apple.quarantine "/Applications/phone-lab Desk.app"`.
 - Lokal: `cd desktop && npm install && npm start`, Installer mit `npm run build:win` bzw. `build:mac`.
 
+## Schwarzes Bild, Beenden
+
+- Auf jedem iPhone Einstellungen > Anzeige & Helligkeit > Automatische Sperre: Nie (die Handys hängen am Strom). Sperrt sich
+  ein Handy trotzdem, zeigt die Kachel "The screen is off" mit Wake, und die nächste Eingabe weckt es zuerst (geht nur ohne Code-Sperre).
+- Hängt der Bildstrom 10 s ohne Bild, verbindet der Server ihn selbst neu (server.log: "Bildstrom hängt").
+- Beenden in der Mac-App (Cmd+Q, Dock oder Knopf "Quit and stop server" unten in der Seitenleiste): "Quit and stop server"
+  stoppt auch den Server (Handys für alle offline, der Mac darf wieder schlafen), "Keep server running" schließt nur die App.
+  Wieder öffnen startet den Server neu. Nach einem Neustart des Macs startet der Server beim Anmelden von selbst.
+
 ## Tageswerte je Handy
 
 - Jede Kachel zeigt die Likes und Kommentare von heute auf diesem Handy, aus dem Zugriffsprotokoll: Doppeltipp = Like, gesendeter Text oder Enter beim direkten Tippen = Kommentar.

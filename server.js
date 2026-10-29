@@ -160,10 +160,12 @@ const cmd = {
   // App aus der Liste in devices.json öffnen
   launch: (dev, { app }) => { const id = APPS[app]; if (!id) throw new Error('unknown app'); return withSession(dev, sid => wda(dev, 'POST', `/session/${sid}/wda/apps/launch`, { bundleId: id })); },
   home: dev => wda(dev, 'POST', '/wda/homescreen'),
+  // gesperrten Bildschirm aufwecken (geht nur ohne Code-Sperre; sonst Auto-Sperre am iPhone auf "Nie")
+  unlock: dev => wda(dev, 'POST', '/wda/unlock').then(r => { dev.locked = false; return r; }),
   quality: (dev, { level }) => withSession(dev, sid => wda(dev, 'POST', `/session/${sid}/appium/settings`, { settings: QUALITY[level] || QUALITY.normal })),
   instagram: dev => withSession(dev, sid => wda(dev, 'POST', `/session/${sid}/wda/apps/launch`, { bundleId: INSTAGRAM })),
 };
-const HTTP_CMDS = new Set(['tap', 'doubletap', 'swipe', 'text', 'keys', 'press', 'launch', 'home', 'instagram']);
+const HTTP_CMDS = new Set(['tap', 'doubletap', 'swipe', 'text', 'keys', 'press', 'launch', 'home', 'instagram', 'unlock']);
 
 // ---------- go-ios ----------
 function ios(args, log) {
@@ -225,10 +227,17 @@ function killWda(dev) {
 async function health(dev) {
   // Während bedient wird, belegt jeder Zusatzaufruf den XCTest-Hauptthread und verzögert die Eingaben. Wer gerade
   // erfolgreich Befehle ausführt, ist ohnehin bereit: dann nichts abfragen.
-  if (dev.ready && (dev.pending || Date.now() - (dev.lastCmd || 0) < 10000)) { dev.lastReady = Date.now(); return; }
+  if (dev.ready && (dev.pending || Date.now() - (dev.lastCmd || 0) < 10000)) {
+    dev.lastReady = Date.now();
+    // auch während Bedienung alle 30 s nachsehen, ob die Auto-Sperre zugeschlagen hat (ein leichter Aufruf ohne Sitzung)
+    if (Date.now() - (dev.lockCheckAt || 0) > 30000) { dev.lockCheckAt = Date.now(); wda(dev, 'GET', '/wda/locked', undefined, 3000).then(lk => { dev.locked = lk.value === true; }).catch(() => {}); }
+    return;
+  }
   try {
     const r = await wda(dev, 'GET', '/status', undefined, 3000);
     dev.ready = !!r.value.ready; dev.fails = 0; if (dev.ready) { if (!dev.readySince) dev.readySince = Date.now(); dev.lastReady = Date.now(); }
+    // Bildschirm gesperrt (Auto-Sperre)? Dann ist das Livebild schwarz und Tippen bewirkt nichts
+    if (dev.ready) { const lk = await wda(dev, 'GET', '/wda/locked', undefined, 3000).catch(() => null); if (lk) dev.locked = lk.value === true; }
     if (dev.ready && Date.now() - (dev.batteryAt || 0) > 60000) {   // Akku nur einmal je Minute, über die Warteschlange
       dev.batteryAt = Date.now();
       const b = await exec(dev, () => withSession(dev, sid => wda(dev, 'GET', `/session/${sid}/wda/batteryInfo`, undefined, 3000)), 'battery').catch(() => null);
@@ -292,10 +301,14 @@ function streamClient(dev, res) {
   if (!st) { st = { clients: new Set(), buf: Buffer.alloc(0), req: null, frames: 0 }; streams.set(dev.id, st); connectUpstream(dev, st); }
   res.writeHead(200, { 'Content-Type': 'multipart/x-mixed-replace; boundary=frame', 'Cache-Control': 'no-cache', Connection: 'close' });
   st.clients.add(res);
-  res.on('close', () => { st.clients.delete(res); if (!st.clients.size) { if (st.req) st.req.destroy(); streams.delete(dev.id); } });
+  res.on('close', () => { st.clients.delete(res); if (!st.clients.size) { clearInterval(st.watch); if (st.req) st.req.destroy(); streams.delete(dev.id); } });
 }
 function connectUpstream(dev, st) {
-  const retry = () => { st.req = null; if (streams.get(dev.id) === st && st.clients.size) setTimeout(() => connectUpstream(dev, st), 2000); };
+  let retried = false;
+  const retry = () => { if (retried) return; retried = true; clearInterval(st.watch); st.req = null; if (streams.get(dev.id) === st && st.clients.size) setTimeout(() => connectUpstream(dev, st), 2000); };
+  // Wächter: kommt 10 s lang kein Bild, obwohl jemand zuschaut, hängt der Strom (WDA schließt ihn dabei nicht): neu verbinden
+  st.lastAt = Date.now(); clearInterval(st.watch);
+  st.watch = setInterval(() => { if (st.clients.size && Date.now() - st.lastAt > 10000) { console.log(`[${dev.name}] Bildstrom hängt, verbinde neu`); req.destroy(); retry(); } }, 5000);
   const req = http.request({ host: '127.0.0.1', port: dev.mjpeg_port, path: '/', method: 'GET' }, up => {
     // Stücke sammeln und erst zusammenfügen, wenn das Bild vollständig ist (statt bei jedem Stück neu zu kopieren)
     let parts = [], have = 0, need = 0;
@@ -487,7 +500,7 @@ const server = http.createServer(async (req, res) => {
     const counts = todayCounts();
     return json(res, 200, { user: user.name, admin: user.admin, version: VERSION, devices: CFG.devices.filter(d => allowed(user, d)).map(d => ({
       id: d.id, name: d.name, ready: !!d.ready, battery: d.battery ?? null, w: d.w, h: d.h, running: !!(d.proc || FAKE),
-      ios: d.ios || null, uptimeMin: d.readySince ? Math.round((Date.now() - d.readySince) / 60000) : null, offlineMin: !d.ready && d.lastReady ? Math.round((Date.now() - d.lastReady) / 60000) : null,
+      ios: d.ios || null, locked: !!d.locked, uptimeMin: d.readySince ? Math.round((Date.now() - d.readySince) / 60000) : null, offlineMin: !d.ready && d.lastReady ? Math.round((Date.now() - d.lastReady) / 60000) : null,
       lockedBy: d.lockedBy && Date.now() - d.lockAt < LOCK_MS && d.lockedBy !== user.name ? d.lockedBy : null,
       today: counts[d.name] || { likes: 0, comments: 0 } })) });
   }
@@ -513,6 +526,8 @@ const server = http.createServer(async (req, res) => {
     const b = await body(req);
     // Auto-Scroll aus dem Browser: wartet noch ein Befehl, diesen Wisch verwerfen statt ihn hinten anzustellen
     if (b.auto && dev.pending) return json(res, 200, { ok: true, skipped: true });
+    // gesperrtes Handy: vor der ersten Eingabe aufwecken, sonst landet der Tipp im Leeren
+    if (dev.locked && action !== 'unlock') await exec(dev, () => cmd.unlock(dev), 'unlock', 8000).catch(() => {});
     // Sperre: belegt, solange ein anderer in den letzten 2 min einen Befehl geschickt hat
     if (dev.lockedBy && dev.lockedBy !== user.name && Date.now() - dev.lockAt < LOCK_MS) return json(res, 409, { ok: false, error: `${dev.name} is in use by ${dev.lockedBy}` });
     if (dev.lockedBy !== user.name) protokoll(user.name, ip, `takes over ${dev.name}`);

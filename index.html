@@ -112,6 +112,10 @@
   .screen.is-paused .paused { display: flex; }
   .screen .offline { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; text-align: center; padding: 20px; color: var(--muted); font-size: 13px; line-height: 18px; }
   .tile.offline .screen .offline { display: flex; }
+  .screen .asleep { position: absolute; inset: 0; display: none; flex-direction: column; gap: 10px; align-items: center; justify-content: center; text-align: center; padding: 20px; color: var(--muted); font-size: 13px; line-height: 18px; background: rgba(0,0,0,.6); }
+  .screen .asleep button { background: var(--text); color: #000; border-color: var(--text); }
+  .tile.asleep:not(.offline) .screen .asleep { display: flex; }
+  #quitApp { margin: 10px 8px 0; width: calc(100% - 16px); }
   .tile.offline .screen img { opacity: .15; }
   .tile.locked .screen { cursor: not-allowed; }
   .tile.locked .screen img { opacity: .45; }
@@ -374,7 +378,8 @@ function phoneView(d, big) {
   el.innerHTML = `
     <div class="t-head"><span class="dot"></span><span class="t-name">${esc(d.name)}</span><span class="t-handle"></span><span class="t-meta num"></span>${big ? '' : `<button class="icon open" title="Open large" aria-label="Open ${esc(d.name)} large">${icon('expand')}</button>`}</div>
     <div class="screen"><img alt="Live screen of ${esc(d.name)}" draggable="false"><canvas></canvas><span class="typing">Typing to phone</span><span class="toast" role="status"></span>
-      <div class="paused">Stream paused</div><div class="offline">Phone offline</div></div>
+      <div class="paused">Stream paused</div><div class="offline">Phone offline</div>
+      <div class="asleep"><span>The screen is off (auto-lock).</span><button class="wake">Wake</button></div></div>
     <div class="note" hidden></div>
     <div class="today"></div>
     <div class="ctrl">
@@ -437,6 +442,8 @@ function phoneView(d, big) {
   $('.send', el).onclick = send;
   inp.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') send(); });
   $('.home', el).onclick = () => post(d.id, 'home');
+  $('.wake', el).onclick = e => { e.stopPropagation(); post(d.id, 'unlock').then(j => j && j.ok ? note(d.id, 'Awake') : note(d.id, 'Error: could not wake. If the phone has a passcode, set Auto-Lock to Never.')); };
+  $('.asleep', el).addEventListener('pointerdown', e => e.stopPropagation());
   $('.back', el).onclick = () => { el.showTrail(backSwipe()); post(d.id, 'swipe', { path: backSwipe() }); };
   $$('.app', el).forEach(b => b.onclick = () => post(d.id, 'launch', { app: b.dataset.app }));
   $('.shot', el).onclick = () => saveShot(d, img);
@@ -669,6 +676,7 @@ function health(d) {
 function refreshStatus() {
   for (const d of statusCache) $$(`[data-id="${d.id}"].tile`).forEach(el => {
     el.classList.toggle('locked', heldByPerson(d)); el.classList.toggle('offline', !d.ready);
+    el.classList.toggle('asleep', !!d.locked);
     const dot = $('.dot', el); dot.classList.toggle('on', d.ready); dot.classList.toggle('starting', !d.ready && d.running);
     $('.t-meta', el).textContent = d.ready ? (d.battery != null ? `${d.battery}%` : '') : d.running ? 'starting' : `offline${d.offlineMin >= 1 ? ' ' + d.offlineMin + ' min' : ''}`;
     $('.offline', el).textContent = d.running ? 'Phone is starting. This takes a minute after plugging in.' : 'Phone offline. Check the USB cable.';
@@ -684,6 +692,12 @@ function refreshStatus() {
   if (busy.length) bits.push(`in use: ${busy.map(d => `${esc(d.name)} (${esc(d.lockedBy)})`).join(', ')}`);
   $('#finding').innerHTML = bits.join(' · ');
   $('#sideFoot').innerHTML = `${statusCache.length} phones over USB<br>Version ${esc(state.version || '?')}`;
+  // only inside the Mac app on the phones' Mac: quit the app and stop the server (VAs lose access until it is opened again)
+  if (window.webkit && webkit.messageHandlers && webkit.messageHandlers.phonelab && !$('#quitApp')) {
+    const b = document.createElement('button'); b.id = 'quitApp'; b.className = 'danger'; b.textContent = 'Quit and stop server';
+    b.onclick = () => webkit.messageHandlers.phonelab.postMessage('quit');
+    $('#sideFoot').after(b);
+  }
 }
 function rebootPhone(id) { if (confirm('Reboot this phone? It will be offline for about a minute.')) post(id, 'reboot').then(j => j && j.ok && note(id, 'Rebooting')); }
 async function refresh() {

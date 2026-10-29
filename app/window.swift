@@ -7,7 +7,7 @@ import WebKit
 
 let dashboardURL = URL(string: "http://127.0.0.1:3000/")!
 
-final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate, WKScriptMessageHandler {
     var window: NSWindow!
     var web: WKWebView!
     let status = NSTextField(labelWithString: "Starting phone-lab…")
@@ -16,6 +16,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         buildMenu()
         let config = WKWebViewConfiguration()
         config.websiteDataStore = .default()                      // Anmeldung bleibt erhalten
+        config.userContentController.add(self, name: "phonelab")  // Knopf "Quit and stop server" im Dashboard
         web = WKWebView(frame: .zero, configuration: config)
         web.navigationDelegate = self
         web.uiDelegate = self
@@ -71,8 +72,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         }.resume()
     }
 
-    // Fenster zu: App beenden, die Dienste laufen unter launchd weiter
-    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+    // Fenster zu: App bleibt im Dock, der Server läuft weiter. Beenden (Cmd+Q, Dock, Knopf im Dashboard) fragt, ob der
+    // Server mit ausgeht: zum Mitnehmen des Laptops oder wenn das Tool gerade nicht gebraucht wird.
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        let a = NSAlert()
+        a.messageText = "Quit phone-lab?"
+        a.informativeText = "Stop the server too: the phones go offline for everyone and the Mac may sleep again. Opening phone-lab starts it again.\n\nKeep the server running: only this window closes, the VAs keep working."
+        a.addButton(withTitle: "Quit and stop server")
+        a.addButton(withTitle: "Keep server running")
+        a.addButton(withTitle: "Cancel")
+        switch a.runModal() {
+        case .alertFirstButtonReturn:
+            let p = Process()
+            p.executableURL = URL(fileURLWithPath: "/bin/launchctl")
+            p.arguments = ["bootout", "gui/\(getuid())/com.phonelab.server"]
+            try? p.run(); p.waitUntilExit()
+            return .terminateNow
+        case .alertSecondButtonReturn: return .terminateNow
+        default: return .terminateCancel
+        }
+    }
+    func userContentController(_ c: WKUserContentController, didReceive message: WKScriptMessage) {
+        if (message.body as? String) == "quit" { NSApp.terminate(nil) }
+    }
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         if !flag { window.makeKeyAndOrderFront(nil) }
         return true

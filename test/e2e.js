@@ -76,6 +76,14 @@ const swipe = { path: [{ x: 0.5, y: 0.8, t: 0 }, { x: 0.5, y: 0.2, t: 200 }] };
     const fr = await fetch(B + '/frame/1', { headers: { cookie: adminCookie } });
     ok(fr.status === 200 && fr.headers.get('content-type') === 'image/jpeg', '/frame liefert ein JPEG');
 
+    // 4b Auto-Sperre: Handy 3 sperrt sich, das Dashboard sieht es, die nächste Eingabe weckt es zuerst
+    await fetch(`http://127.0.0.1:${CFG.devices.find(d => d.id === 3).wda_port}/fake/lock`);
+    let seen = false; for (let i = 0; i < 14 && !seen; i++) { await sleep(1000); seen = (await phone(admin, 3)).locked; }
+    ok(seen, 'gesperrter Bildschirm wird erkannt');
+    ok((await admin.post('/cmd/3/tap', { x: 0.5, y: 0.5 })).ok, 'Tipp auf gesperrtes Handy ok');
+    const s3 = await stats(3);
+    ok(!s3.locked && s3.unlocks === 1, 'Handy vor dem Tipp aufgeweckt', { locked: s3.locked, unlocks: s3.unlocks });
+
     // 5 Stream und Insights
     const ctl = new AbortController(); let bytes = 0;
     const sr = await fetch(B + '/stream/1', { headers: { cookie: adminCookie }, signal: ctl.signal });

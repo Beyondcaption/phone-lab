@@ -21,13 +21,16 @@ for (const dev of CFG.devices) {
     let body = ''; for await (const c of req) body += c;
     const b = body ? JSON.parse(body) : {};
     const u = req.url;
-    if (u === '/fake/stats') return send({ calls: s.calls, maxParallel: s.maxParallel, actions: s.actions.slice(-50), app: s.app });
+    if (u === '/fake/stats') return send({ calls: s.calls, maxParallel: s.maxParallel, actions: s.actions.slice(-50), app: s.app, locked: !!s.locked, unlocks: s.unlocks || 0 });
     if (u === '/status') return send({ ready: true });
     if (u === '/session' && req.method === 'POST') return send({ sessionId: 's1' });
     if (u.endsWith('/window/size')) return send({ width: 375, height: 667 });
     if (u.endsWith('/appium/settings')) return send({});
     if (u.endsWith('/wda/batteryInfo')) return send({ level: 0.5 + dev.id / 20, state: 2 });
     if (u.endsWith('/wda/activeAppInfo')) return send({ bundleId: s.app });
+    if (u === '/wda/locked') return send(s.locked = s.locked || false);
+    if (u === '/fake/lock') { s.locked = true; return send(true); }        // Test: Auto-Sperre auslösen
+    if (u === '/wda/unlock') { s.locked = false; s.unlocks = (s.unlocks || 0) + 1; return send(null); }
     if (u.includes('/source') && SLOW.includes(dev.id)) await sleep(10000);
     if (u.includes('/source')) return send(`<XCUIElementTypeApplication name="Instagram"><XCUIElementTypeStaticText label="Reels"/></XCUIElementTypeApplication>`);
     if (u.endsWith('/element') && req.method === 'POST') { res.writeHead(404, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify({ value: { error: 'no such element' } })); }
