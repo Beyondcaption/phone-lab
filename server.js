@@ -36,11 +36,11 @@ function checkPassword(u, pw) {
 }
 function cookie(req) { const m = /(?:^|;\s*)pl=([a-f0-9]{48})/.exec(req.headers.cookie || ''); return m && sessions.get(m[1]); }
 const allowed = (u, dev) => u.admin || u.devices === 'all' || (Array.isArray(u.devices) && u.devices.includes(dev.id));
-const LOGIN_HTML = (msg = '') => `<!doctype html><html lang="de"><meta charset="utf-8"><title>phone-lab Login</title>
+const LOGIN_HTML = (msg = '') => `<!doctype html><html lang="de"><meta charset="utf-8"><title>phone-lab sign in</title>
 <style>body{margin:0;background:#111;color:#ddd;font:15px system-ui;display:flex;align-items:center;justify-content:center;height:100vh}
 form{background:#1c1c1c;padding:24px;border-radius:8px;display:flex;flex-direction:column;gap:10px;width:260px}input,button{padding:8px;background:#222;color:#ddd;border:1px solid #444}button{cursor:pointer}.m{color:#e66;min-height:18px}</style>
-<form method="post" action="/login"><b>phone-lab</b><input name="name" placeholder="Name" autocomplete="username" required autofocus>
-<input name="pw" type="password" placeholder="Passwort" autocomplete="current-password" required><button>Anmelden</button><div class="m">${msg}</div></form>`;
+<form method="post" action="/login"><b>phone-lab</b><input name="name" placeholder="Username" autocomplete="username" required autofocus>
+<input name="pw" type="password" placeholder="Password" autocomplete="current-password" required><button>Sign in</button><div class="m">${msg}</div></form>`;
 
 // ---------- WDA-HTTP ----------
 function wda(dev, method, p, body, timeout = 15000) {
@@ -51,7 +51,7 @@ function wda(dev, method, p, body, timeout = 15000) {
       let buf = '';
       res.on('data', c => buf += c);
       res.on('end', () => {
-        let j; try { j = JSON.parse(buf); } catch { return reject(new Error('WDA: keine JSON-Antwort')); }
+        let j; try { j = JSON.parse(buf); } catch { return reject(new Error('WDA: no JSON reply')); }
         if (res.statusCode >= 400 || (j.value && j.value.error)) return reject(new Error('WDA: ' + (j.value && j.value.error || res.statusCode)));
         resolve(j);
       });
@@ -94,7 +94,7 @@ const cmd = {
     { type: 'pointerDown', button: 0 }, { type: 'pause', duration: 40 }, { type: 'pointerUp', button: 0 }]))),
   // Wischt entlang der Mausspur: path = [{x,y,t}], t in ms ab Start, x/y als Anteil 0..1
   swipe: (dev, { path }) => {
-    if (!Array.isArray(path) || path.length < 2) throw new Error('swipe braucht path');
+    if (!Array.isArray(path) || path.length < 2) throw new Error('swipe needs a path');
     const cl = v => Math.min(1, Math.max(0, +v || 0));
     const pts = path.slice(-40).map(p => ({ ...px(dev, cl(p.x), cl(p.y)), t: Math.max(0, +p.t || 0) }));
     const steps = [{ type: 'pointerMove', duration: 0, x: pts[0].x, y: pts[0].y }, { type: 'pointerDown', button: 0 }];
@@ -176,6 +176,26 @@ async function health(dev) {
   }
 }
 
+// Insights: aus logs/zugriff.log Sitzungen je Benutzer und Handy bilden. Befehle mit höchstens 2 min Abstand gehören zusammen.
+function insights() {
+  let lines = []; try { lines = fs.readFileSync(path.join(ROOT, 'logs', 'zugriff.log'), 'utf8').trim().split('\n'); } catch {}
+  const sessions = [], open = new Map(), events = [];
+  for (const line of lines) {
+    const m = /^(\S+) (\S+) (\S+) (.*)$/.exec(line); if (!m) continue;
+    const [, ts, name, ip, text] = m, t = Date.parse(ts);
+    events.push({ time: ts, user: name, ip, text });
+    const dm = /^(Handy \d+) (\w+)/.exec(text); if (!dm) continue;
+    const key = name + '|' + dm[1], cur = open.get(key);
+    if (cur && t - cur.end <= LOCK_MS) { cur.end = t; cur.actions++; cur.counts[dm[2]] = (cur.counts[dm[2]] || 0) + 1; }
+    else { const sess = { user: name, phone: dm[1], start: t, end: t, actions: 1, counts: { [dm[2]]: 1 } }; sessions.push(sess); open.set(key, sess); }
+  }
+  const now = Date.now(), day = 86400000;
+  const dur = s => Math.max(30000, s.end - s.start);   // eine Sitzung zählt mindestens 30 s
+  const sum = (filter) => { const by = {}; for (const s of sessions.filter(filter)) { const k = s.user + '|' + s.phone; by[k] = by[k] || { user: s.user, phone: s.phone, minutes: 0, sessions: 0, actions: 0, last: 0, likes: 0 }; const b = by[k]; b.minutes += dur(s) / 60000; b.sessions++; b.actions += s.actions; b.likes += s.counts.doubletap || 0; b.last = Math.max(b.last, s.end); } return Object.values(by).map(b => ({ ...b, minutes: Math.round(b.minutes) })).sort((a, b) => b.minutes - a.minutes); };
+  return { today: sum(s => now - s.end < day), week: sum(s => now - s.end < 7 * day), all: sum(() => true), recent: events.slice(-80).reverse(),
+    devices: CFG.devices.map(d => ({ name: d.name, ready: !!d.ready, lockedBy: d.lockedBy && now - d.lockAt < LOCK_MS ? d.lockedBy : null })) };
+}
+
 // ---------- HTTP ----------
 function json(res, code, obj) { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(obj)); }
 function rawBody(req) { return new Promise(r => { let b = ''; req.on('data', c => b += c); req.on('end', () => r(b)); }); }
@@ -191,11 +211,11 @@ const server = http.createServer(async (req, res) => {
     const b = new URLSearchParams(await rawBody(req));
     const name = (b.get('name') || '').trim().toLowerCase(), pw = b.get('pw') || '';
     const key = name + '|' + ip, f = loginFails.get(key);
-    if (f && f.until > Date.now()) return html(429, LOGIN_HTML('Zu viele Versuche, bitte 1 Minute warten'));
+    if (f && f.until > Date.now()) return html(429, LOGIN_HTML('Too many attempts, please wait 1 minute'));
     const u = users().find(x => x.name === name);
     if (!u || !checkPassword(u, pw)) {
       const n = (f ? f.n : 0) + 1; loginFails.set(key, { n, until: n >= 5 ? Date.now() + 60000 : 0 });
-      protokoll(name, ip, 'login fehlgeschlagen'); return html(401, LOGIN_HTML('Name oder Passwort falsch'));
+      protokoll(name, ip, 'login fehlgeschlagen'); return html(401, LOGIN_HTML('Wrong username or password'));
     }
     loginFails.delete(key);
     const token = crypto.randomBytes(24).toString('hex');
@@ -210,11 +230,15 @@ const server = http.createServer(async (req, res) => {
   }
   if (!user) {
     if (req.method === 'GET' && (route === '' || route === undefined || route === 'login')) return html(200, LOGIN_HTML());
-    return json(res, 401, { error: 'nicht angemeldet' });
+    return json(res, 401, { error: 'not signed in' });
   }
   if (req.method === 'GET' && (route === '' || route === undefined || route === 'login')) {
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     return fs.createReadStream(path.join(ROOT, 'index.html')).pipe(res);
+  }
+  if (req.method === 'GET' && route === 'insights') {
+    if (!user.admin) return json(res, 403, { error: 'admins only' });
+    return json(res, 200, insights());
   }
   if (req.method === 'GET' && route === 'devices') {
     return json(res, 200, { user: user.name, admin: user.admin, devices: CFG.devices.filter(d => allowed(user, d)).map(d => ({
@@ -222,7 +246,7 @@ const server = http.createServer(async (req, res) => {
       lockedBy: d.lockedBy && Date.now() - d.lockAt < LOCK_MS && d.lockedBy !== user.name ? d.lockedBy : null })) });
   }
   const dev = CFG.devices.find(d => String(d.id) === idStr);
-  if (!dev || !allowed(user, dev)) return json(res, 404, { error: 'unbekanntes Gerät' });
+  if (!dev || !allowed(user, dev)) return json(res, 404, { error: 'unknown phone' });
   if (req.method === 'GET' && route === 'stream') {
     const up = http.request({ host: '127.0.0.1', port: dev.mjpeg_port, path: '/', method: 'GET' }, upRes => {
       res.writeHead(200, { 'Content-Type': upRes.headers['content-type'] || 'multipart/x-mixed-replace; boundary=--BoundaryString', 'Cache-Control': 'no-cache' });
@@ -234,7 +258,7 @@ const server = http.createServer(async (req, res) => {
   }
   if (req.method === 'POST' && route === 'cmd' && cmd[action]) {
     // Sperre: belegt, solange ein anderer in den letzten 2 min einen Befehl geschickt hat
-    if (dev.lockedBy && dev.lockedBy !== user.name && Date.now() - dev.lockAt < LOCK_MS) return json(res, 409, { ok: false, error: `${dev.name} wird gerade von ${dev.lockedBy} benutzt` });
+    if (dev.lockedBy && dev.lockedBy !== user.name && Date.now() - dev.lockAt < LOCK_MS) return json(res, 409, { ok: false, error: `${dev.name} is in use by ${dev.lockedBy}` });
     if (dev.lockedBy !== user.name) protokoll(user.name, ip, `übernimmt ${dev.name}`);
     dev.lockedBy = user.name; dev.lockAt = Date.now();
     const b = await body(req);
@@ -242,7 +266,7 @@ const server = http.createServer(async (req, res) => {
     try { await cmd[action](dev, b); return json(res, 200, { ok: true }); }
     catch (e) { return json(res, 502, { ok: false, error: e.message }); }
   }
-  json(res, 404, { error: 'nicht gefunden' });
+  json(res, 404, { error: 'not found' });
 });
 
 (async () => {
