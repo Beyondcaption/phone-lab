@@ -140,7 +140,7 @@ FileVault an, Firewall an (geprüft am 28.10.2026). Automatische Anmeldung nur, 
 ## Warmup
 
 - Admin trägt je Handy unter Warmup ein Startdatum und die Nische ein. Ab dem Tag gilt die 14-Tage-Vorlage (ebenda änderbar): Claude-Minuten und Sitzungen, Likes und Kommentare als Tagesziel der VA, Post-Tage.
-- Claude nur wischt (Reels, Verweildauer nach Nische), keine Likes, Kommentare, Follows, DMs, Profilbesuche. Sitzungen starten zufällig im Zeitfenster, mindestens 90 min Abstand. Während einer Sitzung ist das Handy als Claude belegt; jeder Befehl einer VA oder "Take over" beendet sie sofort.
+- Claude wischt nur (Reels, Verweildauer nach Nische), keine Likes, Kommentare, Follows, DMs, Profilbesuche. Sitzungen starten zufällig im Zeitfenster, mindestens 90 min Abstand. Während einer Sitzung ist das Handy als Claude belegt; jeder Befehl einer VA oder "Take over" beendet sie sofort.
 - Bewertung je Reel mit Haiku 5.5 (ein Standbild, etwa 0,02 Cent), nur wenn `ANTHROPIC_API_KEY` in `~/Library/Application Support/phone-lab/.env` steht. Ohne Key wird ohne Nischen-Bewertung gescrollt. Kosten je Handy und Tag stehen unter Warmup.
 - Wächter: Stoppwörter (Captcha, ungewöhnliche Aktivität, Sperre) oder eine Warnung laut Claude beenden die Sitzung, nehmen das Handy aus dem Plan und zeigen einen roten Hinweis auf der Kachel plus macOS-Mitteilung. Auch während eine VA arbeitet, wird höchstens einmal je Minute in einer Tipp-Pause geprüft. Erst nach "Clear" plant Claude wieder.
 - Likes zählen als Doppeltipp, Kommentare als gesendeter Text oder Enter beim direkten Tippen.
