@@ -17,6 +17,7 @@ const FAKE = !!process.env.PHONELAB_FAKE;
 for (const f of [path.join(DATA, '.env'), path.join(ROOT, '.env')]) { try { process.loadEnvFile(f); break; } catch {} }   // GITHUB_TOKEN für Desk-Updates
 const CFG = JSON.parse(fs.readFileSync(path.join(ROOT, 'devices.json'), 'utf8'));
 const PORT = 3000;
+const VERSION = (() => { try { return fs.readFileSync(path.join(ROOT, 'VERSION'), 'utf8').trim(); } catch { return 'dev'; } })();
 const INSTAGRAM = 'com.burbn.instagram';
 const IOS = fs.existsSync(path.join(ROOT, 'bin', 'ios')) ? path.join(ROOT, 'bin', 'ios') : 'ios';
 const WDA_APP = path.join(ROOT, 'wda', 'WebDriverAgentRunner-Runner.app');
@@ -427,7 +428,8 @@ const server = http.createServer(async (req, res) => {
     return json(res, 401, { error: 'not signed in' });
   }
   if (req.method === 'GET' && (route === '' || route === undefined || route === 'login')) {
-    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    // no-cache: nach einem Update nie das alte Dashboard aus dem Browser-Speicher zeigen
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' });
     return fs.createReadStream(path.join(ROOT, 'index.html')).pipe(res);
   }
   if (req.method === 'GET' && route === 'charts.js') {
@@ -493,7 +495,7 @@ const server = http.createServer(async (req, res) => {
   }
   if (req.method === 'GET' && route === 'devices') {
     const counts = todayCounts();
-    return json(res, 200, { user: user.name, admin: user.admin, devices: CFG.devices.filter(d => allowed(user, d)).map(d => ({
+    return json(res, 200, { user: user.name, admin: user.admin, version: VERSION, devices: CFG.devices.filter(d => allowed(user, d)).map(d => ({
       id: d.id, name: d.name, ready: !!d.ready, battery: d.battery ?? null, w: d.w, h: d.h, running: !!(d.proc || FAKE),
       ios: d.ios || null, uptimeMin: d.readySince ? Math.round((Date.now() - d.readySince) / 60000) : null, offlineMin: !d.ready && d.lastReady ? Math.round((Date.now() - d.lastReady) / 60000) : null,
       lockedBy: d.lockedBy && Date.now() - d.lockAt < LOCK_MS && d.lockedBy !== user.name ? d.lockedBy : null,
@@ -563,7 +565,11 @@ function agentProxy(req, res, user) {
   }
   setInterval(() => CFG.devices.forEach(health), 10000);
   setTimeout(() => CFG.devices.forEach(health), 1500);
-  server.listen(PORT, '127.0.0.1', () => console.log(`phone-lab läuft auf http://127.0.0.1:${PORT}`));
+  server.on('error', e => {
+    if (e.code === 'EADDRINUSE') console.error(`Port ${PORT} ist belegt, vermutlich von einer alten phone-lab-Installation (lsof -nP -iTCP:${PORT} -sTCP:LISTEN). phone-lab.app einmal öffnen beendet sie.`);
+    else console.error(e); process.exit(1);
+  });
+  server.listen(PORT, '127.0.0.1', () => console.log(`phone-lab ${VERSION} läuft auf http://127.0.0.1:${PORT}`));
 })();
 
 function shutdown() { for (const d of CFG.devices) { d.stopping = true; killWda(d); } process.exit(0); }

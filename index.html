@@ -852,15 +852,15 @@ function refreshStatus() {
     if (!firstLoad && !seenAlerts.has(key) && window.Notification && Notification.permission === 'granted') new Notification(`phone-lab: ${d.name} stopped`, { body: d.warmup.alert.reason });
     seenAlerts.add(key);
   }
-  $('#sideFoot').textContent = `${statusCache.length} phones over USB`;
+  $('#sideFoot').innerHTML = `${statusCache.length} phones over USB<br>Version ${esc(state.version || '?')}${state.agent ? '' : ' · warmup off'}`;
 }
 function rebootPhone(id) { if (confirm('Reboot this phone? It will be offline for about a minute.')) post(id, 'reboot').then(j => j && j.ok && note(id, 'Rebooting')); }
 async function refresh() {
   // the warmup service is its own process; the server only passes /agent/* through. Down = no warmup data, phones still work.
   const [r, agent] = await Promise.all([fetch('/devices').catch(() => null), fetch('/agent/phones').then(x => x.ok ? x.json() : null).catch(() => null)]);
   if (!r) return; if (r.status === 401) return location.href = '/login';
-  const { user, admin, devices } = await r.json();
-  state.agent = agent;
+  const { user, admin, devices, version } = await r.json();
+  state.agent = agent; state.version = version;
   for (const d of devices) d.warmup = agent ? agent.phones[d.id] || null : null;
   const first = !state.user;
   state.user = user; state.admin = admin; state.devices = devices; statusCache = devices;

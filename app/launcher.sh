@@ -43,6 +43,12 @@ cat > "$PL" <<P
 </dict></plist>
 P
 launchctl bootout "gui/$(id -u)/com.phonelab.server" >/dev/null 2>&1; sleep 1
+# Was jetzt noch auf Port 3000 oder 3001 lauscht, ist eine alte Installation (Ordner, Terminal, Start.command):
+# beenden, sonst bekommt der neue Dienst den Port nicht und das alte Dashboard bleibt sichtbar
+for PID in $(lsof -tiTCP:3000 -sTCP:LISTEN 2>/dev/null) $(lsof -tiTCP:3001 -sTCP:LISTEN 2>/dev/null); do
+  echo "$(date) beende alten Prozess $PID: $(ps -o command= -p $PID)" >> "$DATA/logs/app.log"; kill $PID 2>/dev/null
+done
+sleep 1
 launchctl bootstrap "gui/$(id -u)" "$PL" >> "$DATA/logs/app.log" 2>&1
 # Warmup-Dienst: eigener Prozess, spricht den Server nur über dessen Befehle an (Dienst-Token in $DATA/service.token)
 WL=~/Library/LaunchAgents/com.phonelab.warmup.plist
