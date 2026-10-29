@@ -40,7 +40,17 @@ Ohne Zutun nach Neustart des Macs: Systemeinstellungen > Benutzer > automatische
 Passworteingabe nach dem Neustart). Mac am Netzteil. Der Bildschirm darf ausgehen, der Mac selbst schläft nicht (caffeinate -is).
 Der Betriebs-Mac braucht kein Internet, außer wenn ein iPhone eine iOS-Version hat, für die kein Entwicklerbild in devimages/ liegt.
 
-## Aktualisieren
+## Verschicken als App (empfohlen)
+
+Entwicklungs-Mac: `./make-app.sh` baut phone-lab.app.zip auf dem Schreibtisch (Version zählt automatisch hoch, steht in VERSION).
+Zip verschicken (AirDrop, Drive, Messenger). Empfänger: Zip doppelklicken, dann einmalig im Terminal
+`xattr -dr com.apple.quarantine ~/Downloads/phone-lab.app` (Pfad anpassen), danach Doppelklick auf phone-lab.app.
+Die App findet eine bestehende Installation (Ordner mit users.json unter ~/phone-lab oder ~/Desktop/phone-lab), ersetzt dort nur die
+Programmdateien, behält Benutzer, Logs, Schlüssel und Pairings, legt eine Sicherung unter phone-lab.vorher an und öffnet ein
+Terminal mit der Einrichtung (Autostart, Neustart). Ohne bestehende Installation installiert sie nach ~/phone-lab.
+Rückschritt: Ordner phone-lab durch phone-lab.vorher ersetzen (users.json und logs vorher rüberkopieren), Server neu starten.
+
+## Aktualisieren von Hand
 
 1. Entwicklungs-Mac: ändern, testen, committen, dann `./make-package.sh`.
 2. Betriebs-Mac, Archiv im selben Ordner wie der bestehende Ordner phone-lab:

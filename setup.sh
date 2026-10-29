@@ -5,6 +5,7 @@ cd "$(dirname "$0")"; mkdir -p logs
 ok() { echo "  ok    $1"; }; fehlt() { echo "  FEHLT $1"; }
 ask() { read -q "r?$1 [y/N] "; echo; [[ $r == y ]]; }
 
+echo "== phone-lab Version $(cat VERSION 2>/dev/null || echo ?) =="
 echo "== Programme =="
 NODE=./bin/node; [[ -x $NODE ]] || NODE=$(command -v node)
 [[ -n "$NODE" ]] && ok "node $($NODE -v)" || { fehlt "bin/node (Paket unvollständig)"; exit 1; }
