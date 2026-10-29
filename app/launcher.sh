@@ -37,6 +37,22 @@ cat > "$PL" <<P
 P
 launchctl bootout "gui/$(id -u)/com.phonelab.server" >/dev/null 2>&1; sleep 1
 launchctl bootstrap "gui/$(id -u)" "$PL" >> "$DATA/logs/app.log" 2>&1
+# Warmup-Dienst: eigener Prozess, spricht den Server nur über dessen Befehle an (Dienst-Token in $DATA/service.token)
+WL=~/Library/LaunchAgents/com.phonelab.warmup.plist
+cat > "$WL" <<P
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>com.phonelab.warmup</string>
+  <key>ProgramArguments</key><array><string>$R/bin/node</string><string>$R/warmup.js</string></array>
+  <key>WorkingDirectory</key><string>$DATA</string>
+  <key>EnvironmentVariables</key><dict><key>PHONELAB_DATA</key><string>$DATA</string><key>HOME</key><string>$HOME</string><key>PATH</key><string>/usr/bin:/bin</string></dict>
+  <key>RunAtLoad</key><true/><key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>$DATA/logs/warmup.log</string><key>StandardErrorPath</key><string>$DATA/logs/warmup.log</string>
+</dict></plist>
+P
+launchctl bootout "gui/$(id -u)/com.phonelab.warmup" >/dev/null 2>&1; sleep 1
+launchctl bootstrap "gui/$(id -u)" "$WL" >> "$DATA/logs/app.log" 2>&1
 # Tailscale-Freigabe, falls Tailscale da ist und noch nichts freigegeben wurde
 TS=/Applications/Tailscale.app/Contents/MacOS/Tailscale
 if [[ -x "$TS" ]] && "$TS" serve status 2>&1 | grep -q "No serve config"; then ("$TS" serve --bg 3000 >> "$DATA/logs/app.log" 2>&1 &); fi

@@ -11,7 +11,7 @@ const ROOT = path.join(__dirname, '..');
 const CFG = JSON.parse(fs.readFileSync(path.join(ROOT, 'devices.json'), 'utf8'));
 const STOP = String(process.env.FAKE_STOP || '').split(',').filter(Boolean).map(Number);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-// FAKE_SLOW=5: Handy 5 braucht 10 s für den Bildschirmtext, wie Instagram auf einem echten iPhone
+// FAKE_SLOW=5: Handy 5 braucht 10 s je Eingabe und für den Bildschirmtext (ein hängendes WDA)
 const SLOW = String(process.env.FAKE_SLOW || '').split(',').filter(Boolean).map(Number);
 
 for (const dev of CFG.devices) {
@@ -34,7 +34,7 @@ for (const dev of CFG.devices) {
     if (u.endsWith('/element') && req.method === 'POST') { res.writeHead(404, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify({ value: { error: 'no such element' } })); }
     // Eingaben: dauern 150 ms, Parallelität wird gezählt
     s.calls++; s.active++; s.maxParallel = Math.max(s.maxParallel, s.active);
-    await sleep(150);
+    await sleep(SLOW.includes(dev.id) ? 10000 : 150);
     s.active--;
     const kind = u.split('/').slice(-1)[0];
     if (kind === 'launch') s.app = b.bundleId;

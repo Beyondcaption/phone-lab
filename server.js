@@ -9,13 +9,12 @@ const path = require('path');
 const { spawn } = require('child_process');
 const crypto = require('crypto');
 const usbmux = require('./usbmux');
-const Warmup = require('./warmup');
 
 const ROOT = __dirname;                                   // Programmdateien (in der App unveränderlich)
 const DATA = process.env.PHONELAB_DATA || ROOT;           // Daten: Benutzer, Einstellungen, Logs, Entwicklerbilder, Pairings
 // Test ohne iPhones: PHONELAB_FAKE=1 startet kein go-ios/usbmux, test/fake-wda.js spielt WDA auf den Ports aus devices.json
 const FAKE = !!process.env.PHONELAB_FAKE;
-for (const f of [path.join(DATA, '.env'), path.join(ROOT, '.env')]) { try { process.loadEnvFile(f); break; } catch {} }   // ANTHROPIC_API_KEY für den Warmup
+for (const f of [path.join(DATA, '.env'), path.join(ROOT, '.env')]) { try { process.loadEnvFile(f); break; } catch {} }   // GITHUB_TOKEN für Desk-Updates
 const CFG = JSON.parse(fs.readFileSync(path.join(ROOT, 'devices.json'), 'utf8'));
 const PORT = 3000;
 const INSTAGRAM = 'com.burbn.instagram';
@@ -48,6 +47,16 @@ const users = () => { try { return JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'
 const sessions = new Map();           // token -> { name, admin, devices, ip }
 const loginFails = new Map();         // name|ip -> { n, until }
 const LOCK_MS = 120000;               // Handy gilt als belegt, solange der letzte Befehl jünger als 2 min ist
+// Dienstzugang für Hintergrund-Dienste auf diesem Mac (z. B. warmup.js): Token in DATA/service.token, kein Admin.
+// Ein Dienst gibt jedem Menschen sofort ab und bekommt 409, solange ein Mensch das Handy hält.
+const SERVICE_TOKEN_FILE = path.join(DATA, 'service.token');
+if (!fs.existsSync(SERVICE_TOKEN_FILE)) fs.writeFileSync(SERVICE_TOKEN_FILE, crypto.randomBytes(24).toString('hex'), { mode: 0o600 });
+const SERVICE = { name: process.env.PHONELAB_SERVICE_NAME || 'claude', admin: false, devices: 'all', service: true, token: fs.readFileSync(SERVICE_TOKEN_FILE, 'utf8').trim() };
+function serviceUser(req) {
+  const m = /^Bearer (\S+)$/.exec(req.headers.authorization || ''); if (!m) return null;
+  const a = Buffer.from(m[1]), b = Buffer.from(SERVICE.token);
+  return a.length === b.length && crypto.timingSafeEqual(a, b) ? SERVICE : null;
+}
 function protokoll(user, ip, text) {
   fs.appendFileSync(path.join(DATA, 'logs', 'zugriff.log'), `${new Date().toISOString()} ${user || '-'} ${ip} ${text}\n`);
 }
@@ -162,14 +171,6 @@ const cmd = {
   home: dev => wda(dev, 'POST', '/wda/homescreen'),
   quality: (dev, { level }) => withSession(dev, sid => wda(dev, 'POST', `/session/${sid}/appium/settings`, { settings: QUALITY[level] || QUALITY.normal })),
   instagram: dev => withSession(dev, sid => wda(dev, 'POST', `/session/${sid}/wda/apps/launch`, { bundleId: INSTAGRAM })),
-  // Reels-Reiter über den Accessibility-Namen, sonst feste Position in der Leiste unten (nur für den Warmup, nicht über HTTP)
-  tapReels: dev => withSession(dev, async sid => {
-    try {
-      const el = (await wda(dev, 'POST', `/session/${sid}/element`, { using: '-ios predicate string', value: "name == 'reels-tab' OR label == 'Reels' OR name == 'Reels'" })).value;
-      const r = (await wda(dev, 'GET', `/session/${sid}/element/${el.ELEMENT || el['element-6066-11e4-a52e-4f735466cecf']}/rect`)).value;
-      return cmd.tap(dev, { x: (r.x + r.width / 2) / dev.w, y: (r.y + r.height / 2) / dev.h });
-    } catch { return cmd.tap(dev, { x: 0.333 + (Math.random() - 0.5) * 0.04, y: 0.937 + (Math.random() - 0.5) * 0.02 }); }
-  }),
 };
 const HTTP_CMDS = new Set(['tap', 'doubletap', 'swipe', 'text', 'keys', 'press', 'launch', 'home', 'instagram']);
 
@@ -259,12 +260,12 @@ function insights() {
   return { ...insCache, devices: deviceStates() };
 }
 const deviceStates = () => CFG.devices.map(d => ({ name: d.name, ready: !!d.ready, lockedBy: d.lockedBy && Date.now() - d.lockAt < LOCK_MS ? d.lockedBy : null }));
-// Likes und Kommentare je Handy heute (für die VA-Aufgaben im Warmup): Doppeltipp = Like, gesendeter Text oder Enter = Kommentar
-function vaCounts() {
+// Likes und Kommentare von Menschen je Handy heute: Doppeltipp = Like, gesendeter Text oder Enter = Kommentar
+function todayCounts() {
   const { sessions } = insights(), today = new Date(); today.setHours(0, 0, 0, 0);
   const by = {};
   for (const s of sessions) {
-    if (s.end < today.getTime() || s.user === 'claude' || s.user === 'warmup') continue;
+    if (s.end < today.getTime() || s.user === SERVICE.name) continue;
     const b = by[s.phone] = by[s.phone] || { likes: 0, comments: 0 };
     b.likes += s.counts.doubletap || 0; b.comments += (s.counts.text || 0) + (s.counts.enter || 0);
   }
@@ -416,7 +417,7 @@ const server = http.createServer(async (req, res) => {
   // Updates für phone-lab Desk, ohne Anmeldung (die App enthält keine Schlüssel). Nur mit GITHUB_TOKEN in .env, sonst 404.
   if (req.method === 'GET' && route === 'desktop') return desktopUpdate(res, idStr);
   // Nur im Testbetrieb ohne iPhones: PHONELAB_AUTOLOGIN=name meldet jede Anfrage ohne Cookie als diesen Admin an (für Screenshots)
-  const user = cookie(req) || (FAKE && process.env.PHONELAB_AUTOLOGIN ? { name: process.env.PHONELAB_AUTOLOGIN, admin: true, devices: 'all', ip } : null);
+  const user = cookie(req) || serviceUser(req) || (FAKE && process.env.PHONELAB_AUTOLOGIN ? { name: process.env.PHONELAB_AUTOLOGIN, admin: true, devices: 'all', ip } : null);
   if (route === 'logout') {
     if (user) { protokoll(user.name, ip, 'logout'); for (const [t, u] of sessions) if (u === user) sessions.delete(t); }
     res.writeHead(303, { 'Set-Cookie': 'pl=; Max-Age=0; Path=/', Location: '/' }); return res.end();
@@ -491,39 +492,24 @@ const server = http.createServer(async (req, res) => {
     return res.end(['start,end,user,phone,minutes,actions,texts,likes', ...rows].join('\n') + '\n');
   }
   if (req.method === 'GET' && route === 'devices') {
+    const counts = todayCounts();
     return json(res, 200, { user: user.name, admin: user.admin, devices: CFG.devices.filter(d => allowed(user, d)).map(d => ({
       id: d.id, name: d.name, ready: !!d.ready, battery: d.battery ?? null, w: d.w, h: d.h, running: !!(d.proc || FAKE),
       ios: d.ios || null, uptimeMin: d.readySince ? Math.round((Date.now() - d.readySince) / 60000) : null, offlineMin: !d.ready && d.lastReady ? Math.round((Date.now() - d.lastReady) / 60000) : null,
       lockedBy: d.lockedBy && Date.now() - d.lockAt < LOCK_MS && d.lockedBy !== user.name ? d.lockedBy : null,
-      warmup: warmup.view(d) })) });
+      today: counts[d.name] || { likes: 0, comments: 0 } })) });
   }
-  if (route === 'warmup' && !idStr) {
-    if (req.method === 'GET') return json(res, 200, warmup.config());
-    if (req.method === 'POST') {
-      if (!user.admin) return json(res, 403, { error: 'admins only' });
-      const b = await body(req);
-      if (b.phone !== undefined) {
-        const d = CFG.devices.find(x => x.id === +b.phone); if (!d) return json(res, 404, { error: 'unknown phone' });
-        warmup.setPhone(d.id, b); protokoll(user.name, ip, `warmup ${d.name} ${JSON.stringify({ start: b.start, niche: b.niche, paused: b.paused })}`);
-      } else { warmup.setGlobal(b); protokoll(user.name, ip, 'warmup settings'); }
-      return json(res, 200, { ok: true, ...warmup.config() });
-    }
-  }
+  // Durchreichung zu einem Zusatzdienst auf diesem Mac (warmup.js auf PHONELAB_AGENT_PORT). Der Server kennt dessen Inhalt
+  // nicht; er hängt nur an, wer angemeldet ist, und das Dienst-Token, damit der Dienst nur Anfragen über den Server annimmt.
+  if (route === 'agent' && !user.service) return agentProxy(req, res, user);
   const dev = CFG.devices.find(d => String(d.id) === idStr);
   if (!dev || !allowed(user, dev)) return json(res, 404, { error: 'unknown phone' });
-  if (req.method === 'POST' && route === 'warmup') {
-    if (action === 'stop') { warmup.stop(dev, `VA ${user.name} stopped it`); protokoll(user.name, ip, `${dev.name} stops warmup session`); return json(res, 200, { ok: true }); }
-    if (!user.admin) return json(res, 403, { error: 'admins only' });
-    if (action === 'clear') { warmup.clearAlert(dev.id); protokoll(user.name, ip, `${dev.name} clears alert`); return json(res, 200, { ok: true }); }
-    if (action === 'run') {
-      if (dev.claude) return json(res, 409, { ok: false, error: 'a session is already running' });
-      if (!dev.ready) return json(res, 409, { ok: false, error: `${dev.name} is not ready` });
-      const minutes = Math.min(60, Math.max(1, +(await body(req)).minutes || 10));
-      protokoll(user.name, ip, `${dev.name} starts warmup session ${minutes} min`);
-      warmup.runSession(dev, minutes, null); return json(res, 200, { ok: true });
-    }
-  }
   if (req.method === 'GET' && route === 'stream') return streamClient(dev, res);
+  // ein einzelnes aktuelles Bild des Bildschirms (JPEG)
+  if (req.method === 'GET' && route === 'frame') {
+    try { const f = await grabFrame(dev); res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Content-Length': f.length, 'Cache-Control': 'no-store' }); return res.end(f); }
+    catch (e) { return json(res, 502, { error: e.message }); }
+  }
   if (req.method === 'POST' && route === 'cmd' && action === 'reboot') {
     if (!user.admin) return json(res, 403, { error: 'admins only' });
     protokoll(user.name, ip, `${dev.name} reboot`); dev.sid = null;
@@ -537,12 +523,13 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'POST' && route === 'cmd' && HTTP_CMDS.has(action)) {
     const b = await body(req);
     // Auto-Scroll aus dem Browser: wartet noch ein Befehl, diesen Wisch verwerfen statt ihn hinten anzustellen
-    if (b.auto && (dev.pending || dev.claude)) return json(res, 200, { ok: true, skipped: true });
-    // Sperre: belegt, solange ein anderer Mensch in den letzten 2 min einen Befehl geschickt hat. Claude gibt sofort ab.
-    if (dev.lockedBy && dev.lockedBy !== 'claude' && dev.lockedBy !== user.name && Date.now() - dev.lockAt < LOCK_MS) return json(res, 409, { ok: false, error: `${dev.name} is in use by ${dev.lockedBy}` });
-    if (dev.claude) { warmup.stop(dev, `VA ${user.name} took over`); protokoll(user.name, ip, `${dev.name} stops warmup session by taking over`); }
+    if (b.auto && dev.pending) return json(res, 200, { ok: true, skipped: true });
+    // Sperre: belegt, solange ein anderer in den letzten 2 min einen Befehl geschickt hat. Hält ein Dienst das Handy,
+    // übernimmt jeder Mensch sofort; ein Dienst bekommt 409, solange ein Mensch es hält.
+    const held = dev.lockedBy && dev.lockedBy !== user.name && Date.now() - dev.lockAt < LOCK_MS;
+    if (held && (user.service || !dev.lockService)) return json(res, 409, { ok: false, error: `${dev.name} is in use by ${dev.lockedBy}` });
     if (dev.lockedBy !== user.name) protokoll(user.name, ip, `takes over ${dev.name}`);
-    dev.lockedBy = user.name; dev.lockAt = Date.now();
+    dev.lockedBy = user.name; dev.lockService = !!user.service; dev.lockAt = Date.now();
     protokoll(user.name, ip, `${dev.name} ${action}${action === 'text' ? ' (' + String(b.text || '').length + ' chars)' : ''}${action === 'keys' && String(b.text || '').includes('\n') ? ' (enter)' : ''}`);
     try { await exec(dev, () => cmd[action](dev, b), `${action} by ${user.name}`, 8000); return json(res, 200, { ok: true }); }
     catch (e) { return json(res, 502, { ok: false, error: e.message }); }
@@ -550,13 +537,17 @@ const server = http.createServer(async (req, res) => {
   json(res, 404, { error: 'not found' });
 });
 
-// macOS-Mitteilung bei Alarmen (nur auf dem Mac)
-function notify(text) {
-  if (process.platform !== 'darwin') return;
-  spawn('osascript', ['-e', `display notification ${JSON.stringify(String(text).slice(0, 200))} with title "phone-lab"`], { stdio: 'ignore' }).on('error', () => {});
+const AGENT_PORT = +(process.env.PHONELAB_AGENT_PORT || 3001);
+function agentProxy(req, res, user) {
+  const p = http.request({ host: '127.0.0.1', port: AGENT_PORT, method: req.method, path: req.url.replace(/^\/agent/, '') || '/', timeout: 15000,
+    headers: { 'Content-Type': req.headers['content-type'] || 'application/json', 'X-Phonelab-Token': SERVICE.token,
+      'X-Phonelab-User': user.name, 'X-Phonelab-Admin': user.admin ? '1' : '0', 'X-Phonelab-Devices': JSON.stringify(user.devices) } }, up => {
+    res.writeHead(up.statusCode, { 'Content-Type': up.headers['content-type'] || 'application/json' }); up.pipe(res);
+  });
+  p.on('timeout', () => p.destroy(new Error('timeout')));
+  p.on('error', () => { if (!res.headersSent) json(res, 503, { error: 'service not running' }); });
+  req.pipe(p);
 }
-const warmup = Warmup.create({ DATA, devices: CFG.devices, exec, wda, withSession, cmd, frame: grabFrame, vaCounts, notify,
-  protokoll: (who, text) => protokoll(who, 'local', text) });
 
 (async () => {
   if (!FAKE && !fs.existsSync(WDA_APP)) { console.error(`WDA-App fehlt: ${WDA_APP}. Auf einem Mac mit Xcode ./build-wda.sh ausführen.`); process.exit(1); }

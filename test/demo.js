@@ -29,7 +29,8 @@ fs.mkdirSync(path.join(DATA, 'logs'), { recursive: true });
 fs.writeFileSync(path.join(DATA, 'logs', 'zugriff.log'), lines.sort().join('\n') + '\n');
 
 const run = (file, env) => spawn(process.execPath, [path.join(ROOT, file)], { env: { ...process.env, ...env }, stdio: 'inherit' });
-const procs = [run('test/fake-wda.js', {}), run('server.js', { PHONELAB_FAKE: '1', PHONELAB_DATA: DATA, PHONELAB_AUTOLOGIN: 'admin', ANTHROPIC_API_KEY: '' })];
+const procs = [run('test/fake-wda.js', {}), run('server.js', { PHONELAB_FAKE: '1', PHONELAB_DATA: DATA, PHONELAB_AUTOLOGIN: 'admin' }),
+  run('warmup.js', { PHONELAB_DATA: DATA, WARMUP_FAKE_JUDGE: '', ANTHROPIC_API_KEY: '' })];   // Bewertung gespielt, ohne API
 process.on('SIGINT', () => { procs.forEach(p => p.kill()); process.exit(0); });
 process.on('SIGTERM', () => { procs.forEach(p => p.kill()); process.exit(0); });
 console.log('Daten in', DATA);

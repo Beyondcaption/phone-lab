@@ -1,7 +1,8 @@
 #!/usr/bin/env node
-// Ende-zu-Ende-Test ohne iPhone: startet test/fake-wda.js und den Server im Testbetrieb (PHONELAB_FAKE=1) mit eigenem
-// Datenordner und prüft Warteschlange, Auto-Scroll, Warmup, Übernahme durch die VA, Wächter und VA-Zähler.
-// Aufruf: node test/e2e.js     (Port 3000 und die Ports aus devices.json müssen frei sein)
+// Ende-zu-Ende-Test ohne iPhone: startet test/fake-wda.js, den Server (PHONELAB_FAKE=1) und den Warmup-Dienst als eigene
+// Prozesse mit eigenem Datenordner. Prüft Fernsteuerung (Warteschlange, Sperre, busy), den Dienstzugang (Mensch geht vor)
+// und den Warmup nur über die Durchreichung /agent/*.
+// Aufruf: node test/e2e.js     (Ports 3000, 3001 und die aus devices.json müssen frei sein)
 'use strict';
 const { spawn } = require('child_process');
 const fs = require('fs');
@@ -19,10 +20,11 @@ const today = (() => { const d = new Date(); return `${d.getFullYear()}-${String
 const mkUser = (name, pw, admin) => { const salt = crypto.randomBytes(16); return { name, salt: salt.toString('hex'), hash: crypto.scryptSync(pw, salt, 32).toString('hex'), admin, devices: 'all' }; };
 fs.writeFileSync(path.join(DATA, 'users.json'), JSON.stringify({ users: [mkUser('admin', 'testpassword1', true), mkUser('va1', 'testpassword2', false)] }));
 
-const procs = [];
-const start = (file, env) => { const p = spawn(process.execPath, [path.join(ROOT, file)], { env: { ...process.env, ...env }, stdio: ['ignore', 'pipe', 'pipe'] }); p.out = ''; p.stdout.on('data', d => p.out += d); p.stderr.on('data', d => p.out += d); procs.push(p); return p; };
-const fake = start('test/fake-wda.js', { FAKE_STOP: '3', FAKE_SLOW: '5' });
-const server = start('server.js', { PHONELAB_FAKE: '1', PHONELAB_DATA: DATA, ANTHROPIC_API_KEY: '' });
+const procs = {};
+const start = (key, file, env) => { const p = spawn(process.execPath, [path.join(ROOT, file)], { env: { ...process.env, ...env }, stdio: ['ignore', 'pipe', 'pipe'] }); p.out = ''; p.stdout.on('data', d => p.out += d); p.stderr.on('data', d => p.out += d); procs[key] = p; return p; };
+start('fake', 'test/fake-wda.js', { FAKE_SLOW: '5' });
+start('server', 'server.js', { PHONELAB_FAKE: '1', PHONELAB_DATA: DATA });
+start('agent', 'warmup.js', { PHONELAB_DATA: DATA, WARMUP_FAKE_JUDGE: '3', ANTHROPIC_API_KEY: '' });
 
 let failed = 0;
 const ok = (cond, msg, extra) => { console.log(`${cond ? 'ok  ' : 'FAIL'} ${msg}${extra !== undefined ? '  ' + JSON.stringify(extra) : ''}`); if (!cond) failed++; };
@@ -31,11 +33,13 @@ async function login(name, pw) {
   return /pl=[a-f0-9]+/.exec(r.headers.get('set-cookie') || '')[0];
 }
 const api = (cookie) => ({
-  get: p => fetch(B + p, { headers: { cookie } }).then(r => r.json()),
+  get: p => fetch(B + p, { headers: { cookie } }).then(async r => ({ status: r.status, ...(await r.json().catch(() => ({}))) })),
   post: (p, b) => fetch(B + p, { method: 'POST', headers: { cookie, 'Content-Type': 'application/json' }, body: JSON.stringify(b || {}) }).then(async r => ({ status: r.status, ...(await r.json()) })),
 });
 const stats = id => fetch(`http://127.0.0.1:${CFG.devices.find(d => d.id === id).wda_port}/fake/stats`).then(r => r.json()).then(j => j.value);
 const phone = async (a, id) => (await a.get('/devices')).devices.find(d => d.id === id);
+const wu = async (a, id) => (await a.get('/agent/phones')).phones[id];
+const swipe = { path: [{ x: 0.5, y: 0.8, t: 0 }, { x: 0.5, y: 0.2, t: 200 }] };
 
 (async () => {
   try {
@@ -44,79 +48,71 @@ const phone = async (a, id) => (await a.get('/devices')).devices.find(d => d.id 
     for (let i = 0; i < 30 && !(await admin.get('/devices')).devices.every(d => d.ready); i++) await sleep(500);
     ok((await admin.get('/devices')).devices.every(d => d.ready), 'alle Handys bereit');
 
-    // 1 Warteschlange: 10 gleichzeitige Tipps kommen einzeln nacheinander an
+    // 1 Fernsteuerung: 10 gleichzeitige Tipps kommen einzeln nacheinander an
     const t0 = Date.now();
     const res = await Promise.all(Array.from({ length: 10 }, (_, i) => admin.post('/cmd/1/tap', { x: 0.1 * i, y: 0.5 })));
-    const s1 = await stats(1);
     ok(res.every(r => r.ok), '10 Tipps ok');
-    ok(s1.maxParallel === 1, 'nie zwei Aufrufe gleichzeitig an WDA', s1.maxParallel);
+    ok((await stats(1)).maxParallel === 1, 'nie zwei Aufrufe gleichzeitig an WDA');
     ok(Date.now() - t0 >= 1400, '10 x 150 ms nacheinander', Date.now() - t0);
-
-    // 2 Auto-Scroll: Wische, die auf einen wartenden Befehl treffen, werden verworfen
-    const auto = await Promise.all(Array.from({ length: 6 }, () => admin.post('/cmd/1/swipe', { auto: true, path: [{ x: 0.5, y: 0.8, t: 0 }, { x: 0.5, y: 0.2, t: 200 }] })));
+    const auto = await Promise.all(Array.from({ length: 6 }, () => admin.post('/cmd/1/swipe', { auto: true, ...swipe })));
     ok(auto.filter(r => r.skipped).length >= 4, 'Auto-Wische bei Stau verworfen', auto.map(r => r.skipped ? 's' : 'x').join(''));
 
-    // 3 Warmup einrichten
-    await admin.post('/warmup', { window: ['00:00', '23:59'] });
-    for (const id of [2, 3, 4]) await admin.post('/warmup', { phone: id, start: today, niche: 'Gaming, Cosplay' });
-    await sleep(31000);   // ein Takt des Planers
-    const p2 = await phone(admin, 2);
-    ok(p2.warmup.day === 1 && p2.warmup.today.scroll === 40, 'Tag 1 mit 40 min Scroll', { day: p2.warmup.day, today: p2.warmup.today });
-    ok(p2.warmup.sessions.length >= 1, 'Sitzungen für heute geplant', p2.warmup.sessions);
-    const va1 = (await (await va.get('/warmup')));
-    ok(va1.window && va1.template.length === 14, 'Vorlage 14 Tage lesbar');
-    ok((await va.post('/warmup', { phone: 2, paused: true })).status === 403, 'VA darf den Warmup nicht ändern');
+    // 2 busy: Handy 5 braucht 10 s je Eingabe; der zweite Befehl kommt nicht binnen 8 s dran und läuft auch später nicht
+    const first = admin.post('/cmd/5/tap', { x: 0.1, y: 0.1 });
+    await sleep(200);
+    const t1 = Date.now(), second = await admin.post('/cmd/5/tap', { x: 0.9, y: 0.9 });
+    ok(!second.ok && /busy/.test(second.error) && Date.now() - t1 < 9000, 'zweiter Befehl meldet busy nach höchstens 8 s', { ms: Date.now() - t1, error: second.error });
+    await first; await sleep(500);
+    ok((await stats(5)).calls === 1, 'verworfener Befehl wurde nicht nachträglich ausgeführt', (await stats(5)).calls);
 
-    // 4 Claude-Sitzung starten, VA übernimmt
-    ok((await admin.post('/warmup/2/run', { minutes: 2 })).ok, 'Sitzung auf Handy 2 gestartet');
+    // 3 Server ohne Warmup: /devices hat Tageszähler, aber keine Warmup-Daten
+    const d1 = await phone(admin, 1);
+    ok(d1.today && d1.warmup === undefined, '/devices: today-Zähler, kein Warmup im Server', d1.today);
+    ok((await admin.get('/frame/1')).status !== 404 && (await fetch(B + '/frame/1', { headers: { cookie: (await login('admin', 'testpassword1')) } })).headers.get('content-type') === 'image/jpeg', '/frame liefert ein JPEG');
+
+    // 4 Warmup über die Durchreichung
+    ok((await admin.post('/agent/config', { window: ['00:00', '23:59'] })).ok, 'Zeitfenster gesetzt (über /agent)');
+    for (const id of [2, 3, 4]) await admin.post('/agent/config', { phone: id, start: today, niche: 'Gaming, Cosplay' });
+    ok((await va.post('/agent/config', { phone: 2, paused: true })).status === 403, 'VA darf den Warmup nicht ändern');
+    await sleep(31000);   // ein Takt des Dienstes
+    const w2 = await wu(admin, 2);
+    ok(w2.day === 1 && w2.today.scroll === 40, 'Tag 1 mit 40 min Scroll', { day: w2.day, today: w2.today });
+    ok(w2.sessions.length >= 1, 'Sitzungen für heute geplant', w2.sessions);
+    ok((await fetch('http://127.0.0.1:3001/phones')).status === 403, 'Dienst nimmt direkte Anfragen ohne Server-Token nicht an');
+
+    // 5 Claude-Sitzung, Mensch übernimmt
+    ok((await admin.post('/agent/phones/2/run', { minutes: 2 })).ok, 'Sitzung auf Handy 2 gestartet');
     await sleep(9000);
-    const run = await phone(admin, 2);
-    ok(run.warmup.claude && run.lockedBy === 'claude', 'Handy 2 als Claude belegt', { claude: run.warmup.claude, lockedBy: run.lockedBy });
-    ok((await stats(2)).app === 'com.burbn.instagram', 'Instagram geöffnet');
+    const run = await phone(admin, 2), runW = await wu(admin, 2);
+    ok(runW.claude && run.lockedBy === 'claude', 'Handy 2 vom Dienst "claude" gehalten', { claude: runW.claude, lockedBy: run.lockedBy });
+    ok((await stats(2)).app === 'com.burbn.instagram', 'Instagram geöffnet (über /cmd/launch)');
     const take = await va.post('/cmd/2/tap', { x: 0.5, y: 0.5 });
-    ok(take.ok, 'VA kann übernehmen, kein 409', take);
-    await sleep(1500);
-    const after = await phone(admin, 2);
-    ok(!after.warmup.claude && after.lockedBy === 'va1', 'Claude hat abgegeben, Handy gehört va1', { lockedBy: after.lockedBy });
+    ok(take.ok, 'VA übernimmt sofort, kein 409', take);
+    await sleep(4500);
+    ok(!(await wu(admin, 2)).claude && (await phone(admin, 2)).lockedBy === 'va1', 'Dienst hat abgegeben, Handy gehört va1');
     const log = fs.readFileSync(path.join(DATA, 'logs', 'scroll.jsonl'), 'utf8').trim().split('\n').map(JSON.parse);
-    ok(log.some(l => l.handy === 2 && l.ereignis === 'ende' && /took over/.test(l.grund)), 'Ende mit Grund "took over" im Log', log.slice(-1)[0]);
+    ok(log.some(l => l.handy === 2 && l.ereignis === 'ende' && /took over/.test(l.grund)), 'Ende "took over" im Log', log.slice(-1)[0]);
     ok((await admin.post('/cmd/2/tap', { x: 0.5, y: 0.5 })).status === 409, 'zweiter Mensch bekommt 409');
+    ok((await admin.post('/agent/phones/2/run', { minutes: 2 })).status === 409, 'Dienst startet nicht, solange ein Mensch hält');
 
-    // 5 Wächter: Handy 3 zeigt einen Sperrhinweis
-    await admin.post('/warmup/3/run', { minutes: 2 });
+    // 6 Warnung: Handy 3 zeigt laut Bewertung eine Warnung
+    await admin.post('/agent/phones/3/run', { minutes: 2 });
     await sleep(10000);
-    const p3 = await phone(admin, 3);
-    ok(p3.warmup.alert && !p3.warmup.claude, 'Alarm auf Handy 3, Sitzung beendet', p3.warmup.alert);
+    const w3 = await wu(admin, 3);
+    ok(w3.alert && !w3.claude, 'Alarm auf Handy 3, Sitzung beendet', w3.alert);
     ok((await stats(3)).app === 'com.apple.springboard', 'Handy 3 zurück auf dem Homescreen');
     ok(fs.readFileSync(path.join(DATA, 'logs', 'alerts.log'), 'utf8').includes('Phone 3'), 'alerts.log geschrieben');
-    await admin.post('/warmup/3/clear');
-    ok(!(await phone(admin, 3)).warmup.alert, 'Alarm quittiert');
+    await admin.post('/agent/phones/3/clear');
+    ok(!(await wu(admin, 3)).alert, 'Alarm quittiert');
 
-    // 6 VA-Zähler: 2 Likes, 1 Kommentar per Enter, 1 gesendeter Text
+    // 7 VA-Zähler
     await va.post('/cmd/4/doubletap', { x: 0.5, y: 0.5 }); await va.post('/cmd/4/doubletap', { x: 0.5, y: 0.5 });
     await va.post('/cmd/4/keys', { text: 'so cool\n' }); await va.post('/cmd/4/text', { text: 'nice' });
     await sleep(5500);
-    const p4 = await phone(admin, 4);
-    ok(p4.warmup.done.likes === 2 && p4.warmup.done.comments === 2, 'Likes 2, Kommentare 2 auf Handy 4', p4.warmup.done);
+    const w4 = await wu(admin, 4);
+    ok(w4.done.likes === 2 && w4.done.comments === 2, 'Likes 2, Kommentare 2 auf Handy 4', w4.done);
 
-    // 6b Handy 5 braucht 10 s für den Bildschirmtext (echtes Instagram). Eine VA, die bedient und dann 5 s schaut,
-    // darf danach nicht hängen (früher hielt der Wächter genau dann die Warteschlange fest)
-    await va.post('/cmd/5/tap', { x: 0.5, y: 0.5 });
-    await sleep(35000);   // mehr als ein Planer-Takt mit Tipp-Pause
-    let t1 = Date.now(); const idleTap = await va.post('/cmd/5/swipe', { path: [{ x: 0.5, y: 0.8, t: 0 }, { x: 0.5, y: 0.2, t: 200 }] });
-    ok(idleTap.ok && Date.now() - t1 < 1500, 'Wisch nach Pause sofort ausgeführt', Date.now() - t1);
-    // Claude liest gerade den langsamen Bildschirmtext; ein Befehl, der nicht binnen 8 s drankommt, meldet "busy" und läuft nicht später
-    ok((await admin.post('/warmup/5/run', { minutes: 2 })).ok, 'Sitzung auf Handy 5 gestartet');
-    await sleep(8000);    // Claude: Instagram öffnen (2,5-5 s), Reels-Reiter, Pause (2-4 s), dann der 10-s-Bildschirmtext
-    t1 = Date.now(); const busy = await va.post('/cmd/5/tap', { x: 0.2, y: 0.2 });
-    ok(!busy.ok && /busy/.test(busy.error) && Date.now() - t1 < 9000, 'Befehl hinter langsamem Aufruf meldet busy nach höchstens 8 s', { ms: Date.now() - t1, busy });
-    await sleep(4000);
-    const late = (await stats(5)).actions.filter(a => a.t > t1 && a.kind === 'actions');
-    ok(late.length === 0, 'verworfener Tipp wurde nicht später ausgeführt', late.length);
-    ok((await va.post('/cmd/5/tap', { x: 0.2, y: 0.2 })).ok, 'nächster Tipp geht wieder durch');
-    ok(!(await phone(admin, 5)).warmup.claude, 'Claude hat Handy 5 abgegeben');
-
-    // 7 Stream: Bilder kommen an, Insights rechnen
+    // 8 Stream und Insights
     const ctl = new AbortController(); let bytes = 0;
     const sr = await fetch(B + '/stream/1', { headers: { cookie: (await login('admin', 'testpassword1')) }, signal: ctl.signal });
     const rd = sr.body.getReader(); const until = Date.now() + 1500;
@@ -125,10 +121,15 @@ const phone = async (a, id) => (await a.get('/devices')).devices.find(d => d.id 
     ok(bytes > 20000, 'Stream liefert Bilder', bytes);
     const ins = await admin.get('/insights');
     ok(ins.today.length > 0 && ins.devices.length === CFG.devices.length, 'Insights ok');
+
+    // 9 Dienst aus: Fernsteuerung läuft weiter, /agent antwortet 503
+    procs.agent.kill(); await sleep(800);
+    ok((await admin.get('/agent/phones')).status === 503, 'ohne Dienst: /agent antwortet 503');
+    ok((await va.post('/cmd/4/tap', { x: 0.5, y: 0.5 })).ok, 'ohne Dienst: Fernsteuerung geht weiter');
   } catch (e) { console.log('FAIL Ausnahme:', e.stack); failed++; }
   finally {
-    if (failed) console.log('--- Server-Log ---\n' + server.out.slice(-3000));
-    procs.forEach(p => p.kill());
+    if (failed) console.log('--- Server ---\n' + procs.server.out.slice(-2000) + '\n--- Dienst ---\n' + procs.agent.out.slice(-2000));
+    Object.values(procs).forEach(p => p.kill());
     console.log(failed ? `${failed} Fehler` : 'alles ok');
     process.exit(failed ? 1 : 0);
   }

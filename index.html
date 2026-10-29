@@ -511,8 +511,8 @@ function phoneView(d, big) {
   $$('.app', el).forEach(b => b.onclick = () => post(d.id, 'launch', { app: b.dataset.app }));
   $('.shot', el).onclick = () => saveShot(d, img);
   $('.auto', el).onclick = () => state.auto[d.id] ? stopAuto(d.id) : startAuto(d.id, +$('.sec', el).value);
-  $('.cstop', el).onclick = () => jpost(`/warmup/${d.id}/stop`).then(() => { note(d.id, 'Claude stopped, the phone is yours'); refresh(); });
-  if ($('.clear', el)) $('.clear', el).onclick = () => jpost(`/warmup/${d.id}/clear`).then(refresh);
+  $('.cstop', el).onclick = () => jpost(`/agent/phones/${d.id}/stop`).then(() => { note(d.id, 'Claude stopped, the phone is yours'); refresh(); });
+  if ($('.clear', el)) $('.clear', el).onclick = () => jpost(`/agent/phones/${d.id}/clear`).then(refresh);
   if (!big) { $('.open', el).onclick = () => openFocus(d.id); $('.t-name', el).onclick = () => openFocus(d.id); }
   img.onerror = () => { if (!img._live) return; img.style.visibility = 'hidden'; setTimeout(() => { if (img._live) img.src = `/stream/${d.id}?${Date.now()}`; }, 5000); };
   img.onload = () => img.style.visibility = '';
@@ -528,6 +528,11 @@ function phoneView(d, big) {
 // warmup block of a tile, from /devices
 function renderWarmup(el, d) {
   const w = d.warmup, box = $('.wu', el);
+  if (!state.agent) {
+    const html = state.admin ? '<div class="wu-empty">Warmup service not running</div>' : '';
+    if (box._html !== html) { box.innerHTML = html; box._html = html; }
+    return;
+  }
   if (!w || !w.day) {
     const msg = w && w.start ? `Warmup starts ${esc(w.start)}` : 'No warmup set for this phone';
     const html = `<div class="wu-empty">${msg}${state.admin ? ' · <a href="#warmup">Set up</a>' : ''}</div>`;
@@ -580,7 +585,10 @@ function stopAuto(id) {
   $$(`[data-id="${id}"] .auto`).forEach(b => { b.classList.remove('on'); b.textContent = 'Auto'; });
 }
 document.addEventListener('visibilitychange', () => document.hidden && Object.keys(state.auto).forEach(id => stopAuto(+id)));
-$('#autoAll').onclick = () => state.devices.filter(d => d.ready && !d.lockedBy && !(d.warmup && d.warmup.claude)).forEach(d => startAuto(d.id, +$('#allSec').value));
+// the warmup service signs in as "claude" (PHONELAB_SERVICE_NAME); a person can always take a phone from it
+const SERVICE_NAME = 'claude';
+const heldByPerson = d => !!d.lockedBy && d.lockedBy !== SERVICE_NAME;
+$('#autoAll').onclick = () => state.devices.filter(d => d.ready && !heldByPerson(d) && !(d.warmup && d.warmup.claude)).forEach(d => startAuto(d.id, +$('#allSec').value));
 $('#stopAll').onclick = () => Object.keys(state.auto).forEach(id => stopAuto(+id));
 
 // ---------- focus view with direct typing ----------
@@ -673,10 +681,12 @@ $('#sSave').onclick = async () => {
 // ---------- warmup (admins) ----------
 let wuCfg = null;
 async function loadWarmup() {
-  wuCfg = await fetch('/warmup').then(r => r.json());
+  wuCfg = state.agent && state.agent.config;
+  if (!wuCfg) { await refresh(); wuCfg = state.agent && state.agent.config; }
+  if (!wuCfg) { $('#wuFinding').innerHTML = '<span class="lock">The warmup service is not running on the Mac. Phones work as usual; open phone-lab once to start the service.</span>'; $('#wuTable tbody').innerHTML = ''; $('#tplTable tbody').innerHTML = ''; return; }
   $('#wFrom').value = wuCfg.window[0]; $('#wTo').value = wuCfg.window[1];
   $('#wKey').innerHTML = wuCfg.hasKey ? `Reels are rated by ${esc(wuCfg.model)} for the niche; a warning on screen stops the session.`
-    : '<span class="lock">No ANTHROPIC_API_KEY in .env: Claude scrolls without rating the niche. Stop words still end a session.</span>';
+    : '<span class="lock">No ANTHROPIC_API_KEY in .env: no sessions run, because without Claude looking at the screen nothing would catch a warning.</span>';
   $('#tplTable tbody').innerHTML = wuCfg.template.map((t, i) => `<tr data-i="${i}"><td>Day ${i + 1}</td>
     <td class="num"><input type="number" min="0" max="240" data-k="scroll" value="${t.scroll}" aria-label="Claude minutes day ${i + 1}"></td>
     <td class="num"><input type="number" min="1" max="6" data-k="sessions" value="${t.sessions}" aria-label="Sessions day ${i + 1}"></td>
@@ -699,19 +709,19 @@ function renderWarmupTable() {
       <td class="num">${done.cost ? '$' + done.cost.toFixed(3) : '<span class="stamp">$0.000</span>'}</td>
       <td style="min-width:150px">${sess}</td>
       <td><label class="switch"><input type="checkbox" class="wPaused" ${w.paused ? 'checked' : ''} aria-label="Pause ${esc(d.name)}"><i></i></label></td>
-      <td style="text-align:right;white-space:nowrap">${w.alert ? '<button class="danger wClear">Clear alert</button> ' : ''}${w.claude ? '<button class="wStop">Stop</button>' : `<button class="wRun" ${d.ready ? '' : 'disabled title="Phone not ready"'}>Run 10 min</button>`}</td></tr>`;
+      <td style="text-align:right;white-space:nowrap">${w.alert ? '<button class="danger wClear">Clear alert</button> ' : ''}${w.claude ? '<button class="wStop">Stop</button>' : `<button class="wRun" ${d.ready ? '' : 'disabled title="Phone not ready"'}title="Start a 10-minute session now">Run 10m</button>`}</td></tr>`;
   });
   const tb = $('#wuTable tbody');
   if (document.activeElement && tb.contains(document.activeElement)) return;   // do not redraw under the cursor
   tb.innerHTML = rows.join('');
   $$('#wuTable tbody tr').forEach(tr => {
-    const id = +tr.dataset.id, save = b => jpost('/warmup', { phone: id, ...b }).then(() => { $('#wuStamp').textContent = 'Saved ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); refresh(); });
+    const id = +tr.dataset.id, save = b => jpost('/agent/config', { phone: id, ...b }).then(() => { $('#wuStamp').textContent = 'Saved ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); refresh(); });
     $('.wStart', tr).onchange = e => save({ start: e.target.value || null });
     $('.wNiche', tr).onchange = e => save({ niche: e.target.value });
     $('.wPaused', tr).onchange = e => save({ paused: e.target.checked });
-    if ($('.wRun', tr)) $('.wRun', tr).onclick = () => jpost(`/warmup/${id}/run`, { minutes: 10 }).then(j => { if (!j.ok) $('#wuStamp').textContent = 'Error: ' + j.error; refresh(); });
-    if ($('.wStop', tr)) $('.wStop', tr).onclick = () => jpost(`/warmup/${id}/stop`).then(refresh);
-    if ($('.wClear', tr)) $('.wClear', tr).onclick = () => jpost(`/warmup/${id}/clear`).then(refresh);
+    if ($('.wRun', tr)) $('.wRun', tr).onclick = () => jpost(`/agent/phones/${id}/run`, { minutes: 10 }).then(j => { if (!j.ok) $('#wuStamp').textContent = 'Error: ' + j.error; refresh(); });
+    if ($('.wStop', tr)) $('.wStop', tr).onclick = () => jpost(`/agent/phones/${id}/stop`).then(refresh);
+    if ($('.wClear', tr)) $('.wClear', tr).onclick = () => jpost(`/agent/phones/${id}/clear`).then(refresh);
   });
   const active = state.devices.filter(d => d.warmup && d.warmup.day && !d.warmup.finished);
   const mins = active.reduce((a, d) => a + Math.round((d.warmup.done || {}).scrollMin || 0), 0), want = active.reduce((a, d) => a + ((d.warmup.today || {}).scroll || 0), 0);
@@ -720,10 +730,10 @@ function renderWarmupTable() {
   $('#wuFinding').innerHTML = active.length ? `<b>${active.length}</b> ${active.length === 1 ? 'phone' : 'phones'} warming up · Claude scrolled <b>${mins}</b> of ${want} min today · $${cost.toFixed(3)}${alerts ? ` · <b style="color:var(--pill-negative-ink)">${alerts} ${alerts === 1 ? 'alert' : 'alerts'}</b>` : ''}`
     : 'No phone is warming up. Set a start date to begin.';
 }
-$('#wSave').onclick = async () => { const j = await jpost('/warmup', { window: [$('#wFrom').value, $('#wTo').value] }); $('#wMsg').textContent = j.ok ? 'Saved' : 'Error: ' + j.error; refresh(); };
+$('#wSave').onclick = async () => { const j = await jpost('/agent/config', { window: [$('#wFrom').value, $('#wTo').value] }); $('#wMsg').textContent = j.ok ? 'Saved' : 'Error: ' + j.error; refresh(); };
 $('#tplSave').onclick = async () => {
   const template = $$('#tplTable tbody tr').map(tr => { const o = {}; $$('input', tr).forEach(i => o[i.dataset.k] = i.type === 'checkbox' ? i.checked : +i.value); return o; });
-  const j = await jpost('/warmup', { template }); $('#tplMsg').textContent = j.ok ? 'Saved ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Error: ' + j.error; refresh();
+  const j = await jpost('/agent/config', { template }); $('#tplMsg').textContent = j.ok ? 'Saved ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Error: ' + j.error; refresh();
 };
 
 // ---------- team (admins) ----------
@@ -813,7 +823,7 @@ function health(d) {
 function refreshStatus() {
   for (const d of statusCache) $$(`[data-id="${d.id}"].tile`).forEach(el => {
     const w = d.warmup || {}, claude = !!w.claude;
-    el.classList.toggle('locked', !!d.lockedBy && !claude); el.classList.toggle('offline', !d.ready); el.classList.toggle('claude-on', claude);
+    el.classList.toggle('locked', heldByPerson(d)); el.classList.toggle('offline', !d.ready); el.classList.toggle('claude-on', claude);
     const dot = $('.dot', el); dot.classList.toggle('on', d.ready); dot.classList.toggle('starting', !d.ready && d.running);
     $('.t-meta', el).textContent = d.ready ? (d.battery != null ? `${d.battery}%` : '') : d.running ? 'starting' : `offline${d.offlineMin >= 1 ? ' ' + d.offlineMin + ' min' : ''}`;
     $('.offline', el).textContent = d.running ? 'Phone is starting. This takes a minute after plugging in.' : 'Phone offline. Check the USB cable.';
@@ -821,7 +831,7 @@ function refreshStatus() {
     if (claude) { const m = Math.max(1, Math.round((Date.now() - w.claude.since) / 60000)); $('.ctext', el).textContent = `Claude scrolls · ${m}/${w.claude.minutes} min`; $('.ctext', el).title = `Claude is scrolling, minute ${m} of ${w.claude.minutes}, ${w.claude.reels} reels`; }
     renderWarmup(el, d);
     const m = $('.msg', el);
-    if (d.lockedBy && !claude) m.innerHTML = `<span class="lock">In use by ${esc(d.lockedBy)}</span>`;
+    if (heldByPerson(d)) m.innerHTML = `<span class="lock">In use by ${esc(d.lockedBy)}</span>`;
     else if (m.querySelector('.lock')) m.textContent = '';
   });
   if (state.focusId != null) { const d = statusCache.find(x => x.id === state.focusId); if (d) $('#focusHealth').innerHTML = health(d) + (state.admin ? ` · <button class="danger" style="height:26px" onclick="rebootPhone(${d.id})">Reboot phone</button>` : ''); }
@@ -846,9 +856,12 @@ function refreshStatus() {
 }
 function rebootPhone(id) { if (confirm('Reboot this phone? It will be offline for about a minute.')) post(id, 'reboot').then(j => j && j.ok && note(id, 'Rebooting')); }
 async function refresh() {
-  const r = await fetch('/devices').catch(() => null);
+  // the warmup service is its own process; the server only passes /agent/* through. Down = no warmup data, phones still work.
+  const [r, agent] = await Promise.all([fetch('/devices').catch(() => null), fetch('/agent/phones').then(x => x.ok ? x.json() : null).catch(() => null)]);
   if (!r) return; if (r.status === 401) return location.href = '/login';
   const { user, admin, devices } = await r.json();
+  state.agent = agent;
+  for (const d of devices) d.warmup = agent ? agent.phones[d.id] || null : null;
   const first = !state.user;
   state.user = user; state.admin = admin; state.devices = devices; statusCache = devices;
   $('#who').textContent = user;
