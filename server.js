@@ -236,6 +236,39 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     return fs.createReadStream(path.join(ROOT, 'index.html')).pipe(res);
   }
+  if (route === 'users') {
+    if (!user.admin) return json(res, 403, { error: 'admins only' });
+    const db = (() => { try { return JSON.parse(fs.readFileSync(USERS_FILE, 'utf8')); } catch { return { users: [] }; } })();
+    const save = () => fs.writeFileSync(USERS_FILE, JSON.stringify(db, null, 2) + '\n', { mode: 0o600 });
+    const pub = u => ({ name: u.name, admin: !!u.admin, devices: u.devices === 'all' ? 'all' : (u.devices || []) });
+    if (req.method === 'GET') return json(res, 200, db.users.map(pub));
+    const b = await body(req);
+    const name = String(b.name || '').trim().toLowerCase();
+    if (!/^[a-z0-9_-]{2,20}$/.test(name)) return json(res, 400, { error: 'name: 2-20 letters, digits, - or _' });
+    const u = db.users.find(x => x.name === name);
+    if (req.method === 'DELETE') {
+      if (!u) return json(res, 404, { error: 'unknown user' });
+      if (u.admin && db.users.filter(x => x.admin).length === 1) return json(res, 400, { error: 'cannot remove the last admin' });
+      db.users = db.users.filter(x => x !== u); save(); for (const [t, s] of sessions) if (s.name === name) sessions.delete(t);
+      protokoll(user.name, ip, `removes user ${name}`); return json(res, 200, { ok: true });
+    }
+    if (req.method === 'POST') {
+      const devices = b.devices === 'all' ? 'all' : (Array.isArray(b.devices) ? b.devices.map(Number).filter(Boolean) : undefined);
+      if (b.pw !== undefined && String(b.pw).length < 10) return json(res, 400, { error: 'password: at least 10 characters' });
+      let target = u;
+      if (!target) {
+        if (b.pw === undefined) return json(res, 400, { error: 'password required for a new user' });
+        target = { name, salt: '', hash: '', admin: false, devices: 'all' }; db.users.push(target);
+      }
+      if (b.pw !== undefined) { const salt = crypto.randomBytes(16); target.salt = salt.toString('hex'); target.hash = crypto.scryptSync(String(b.pw), salt, 32).toString('hex'); }
+      if (b.admin !== undefined) target.admin = !!b.admin;
+      if (devices !== undefined) target.devices = devices;
+      if (!db.users.some(x => x.admin)) return json(res, 400, { error: 'at least one admin is required' });
+      save(); for (const [t, s] of sessions) if (s.name === name) { s.admin = !!target.admin; s.devices = target.devices; }
+      protokoll(user.name, ip, `${u ? 'updates' : 'adds'} user ${name}${b.pw !== undefined ? ' (password)' : ''}`);
+      return json(res, 200, { ok: true, user: pub(target) });
+    }
+  }
   if (req.method === 'GET' && route === 'insights') {
     if (!user.admin) return json(res, 403, { error: 'admins only' });
     return json(res, 200, insights());

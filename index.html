@@ -41,12 +41,15 @@
   #focus .side .help { color: var(--muted); font-size: 12px; line-height: 1.7; }
   #focus .phones { display: flex; flex-wrap: wrap; gap: 6px; }
 
-  /* Insights */
-  #insights { position: fixed; inset: 0; background: rgba(0,0,0,.85); display: none; z-index: 10; padding: 24px; overflow: auto; }
-  #insights.open { display: block; }
-  #insights .box { max-width: 1000px; margin: 0 auto; background: var(--panel); border-radius: 10px; padding: 16px; }
-  #insights h2 { margin: 0; font-size: 18px; }
-  #insights h3 { margin: 16px 0 6px; font-size: 14px; color: var(--muted); }
+  /* Modals: Insights, Users */
+  .modal { position: fixed; inset: 0; background: rgba(0,0,0,.85); display: none; z-index: 10; padding: 24px; overflow: auto; }
+  .modal.open { display: block; }
+  .modal .box { max-width: 1000px; margin: 0 auto; background: var(--panel); border-radius: 10px; padding: 16px; }
+  .modal h2 { margin: 0; font-size: 18px; }
+  .modal h3 { margin: 16px 0 6px; font-size: 14px; color: var(--muted); }
+  .modal label { color: var(--muted); font-size: 13px; }
+  button.primary { background: #2a4d7a; border-color: #3a6aa6; }
+  button.danger { border-color: #844; }
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
   th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--line); }
   th { color: var(--muted); font-weight: normal; }
@@ -60,6 +63,7 @@
   <b>phone-lab</b>
   <span id="who" style="color:var(--muted)"></span>
   <span class="sp"></span>
+  <button id="usersBtn" style="display:none">Users</button>
   <button id="insightsBtn" style="display:none">Insights</button>
   <a href="/logout"><button>Sign out</button></a>
 </div>
@@ -81,7 +85,21 @@
   </div>
 </div>
 
-<div id="insights"><div class="box">
+<div id="users" class="modal"><div class="box">
+  <div style="display:flex;align-items:center;gap:10px"><h2 style="flex:1">Users</h2><button id="usersClose">Close</button></div>
+  <table id="usersTable"><thead><tr><th>User</th><th>Role</th><th>Phones</th><th></th></tr></thead><tbody></tbody></table>
+  <h3>Add or update a user</h3>
+  <div class="row" style="gap:8px">
+    <input type="text" id="uName" placeholder="username" style="width:140px">
+    <input type="text" id="uPw" placeholder="password (min. 10)" style="width:180px">
+    <label><input type="checkbox" id="uAdmin"> admin</label>
+    <span id="uPhones"></span>
+    <button id="uSave" class="primary">Save</button>
+  </div>
+  <div class="msg" id="uMsg"></div>
+</div></div>
+
+<div id="insights" class="modal"><div class="box">
   <div style="display:flex;align-items:center;gap:10px"><h2 style="flex:1">Insights</h2><button id="insightsClose">Close</button></div>
   <div class="tabs"><button class="on" data-range="today">Today</button><button data-range="week">7 days</button><button data-range="all">All time</button></div>
   <h3>Time per user and phone</h3>
@@ -178,13 +196,21 @@ function phoneView(d, big) {
 }
 
 // ---------- auto-scroll (only while the page is open; any manual action on that phone stops it) ----------
+// every swipe is a little different: start point, length, slight curve and speed vary like a thumb would
+const rnd = (a, b) => a + Math.random() * (b - a);
+function autoSwipe() {
+  const x0 = rnd(0.35, 0.65), y0 = rnd(0.7, 0.85), len = rnd(0.5, 0.65), drift = rnd(-0.06, 0.06), bend = rnd(-0.04, 0.04), total = rnd(180, 320);
+  const n = 5 + Math.floor(rnd(0, 4)), pts = [];
+  for (let i = 0; i <= n; i++) { const u = i / n, e = 1 - Math.pow(1 - u, 1.5); pts.push({ x: x0 + drift * e + bend * Math.sin(Math.PI * e), y: y0 - len * e, t: Math.round(total * u) }); }
+  return pts;
+}
 function startAuto(id, sec) {
   sec = Math.min(60, Math.max(3, sec || 8));
   stopAuto(id);
   const end = Date.now() + AUTO_MAX_MIN * 60000;
   const tick = () => {
     if (document.hidden || Date.now() > end) return stopAuto(id);
-    const p = [{ x: 0.5, y: 0.8, t: 0 }, { x: 0.5, y: 0.5, t: 120 }, { x: 0.5, y: 0.2, t: 250 }];
+    const p = autoSwipe();
     document.querySelectorAll(`[data-id="${id}"]`).forEach(v => v.showTrail && v.showTrail(p));
     post(id, 'swipe', { path: p });
   };
@@ -212,7 +238,7 @@ $('#focusClose').onclick = closeFocus;
 $('#focus').addEventListener('click', e => { if (e.target === $('#focus')) closeFocus(); });
 document.addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT') return;
-  if ($('#insights').classList.contains('open')) { if (e.key === 'Escape') $('#insights').classList.remove('open'); return; }
+  const modal = $('.modal.open'); if (modal) { if (e.key === 'Escape') modal.classList.remove('open'); return; }
   if (state.focusId == null) return;
   const i = state.devices.findIndex(x => x.id === state.focusId), k = e.key.toLowerCase();
   if (e.key === 'Escape') closeFocus();
@@ -239,6 +265,30 @@ function renderInsights() {
   $('#insLog').textContent = insData.recent.map(e => `${e.time.replace('T', ' ').slice(0, 19)}  ${e.user.padEnd(10)}  ${e.text}`).join('\n');
 }
 $('#insightsBtn').onclick = openInsights;
+
+// ---------- user management (admins) ----------
+async function openUsers() {
+  $('#users').classList.add('open'); $('#uMsg').textContent = '';
+  $('#uPhones').innerHTML = `<label><input type="checkbox" id="uAll" checked> all phones</label> ` + state.devices.map(d => `<label><input type="checkbox" class="uDev" value="${d.id}"> ${d.name}</label>`).join(' ');
+  $('#uAll').onchange = () => document.querySelectorAll('.uDev').forEach(c => c.disabled = $('#uAll').checked);
+  $('#uAll').onchange();
+  const list = await fetch('/users').then(r => r.json());
+  $('#usersTable tbody').innerHTML = list.map(u => `<tr><td>${u.name}</td><td>${u.admin ? 'admin' : 'VA'}</td><td>${u.admin || u.devices === 'all' ? 'all' : u.devices.map(i => (state.devices.find(d => d.id === i) || { name: '#' + i }).name).join(', ') || 'none'}</td>
+    <td style="text-align:right"><button data-edit="${u.name}">Edit</button> <button class="danger" data-del="${u.name}">Remove</button></td></tr>`).join('');
+  $('#usersTable').querySelectorAll('[data-edit]').forEach(b => b.onclick = () => { const u = list.find(x => x.name === b.dataset.edit); $('#uName').value = u.name; $('#uPw').value = ''; $('#uAdmin').checked = u.admin;
+    $('#uAll').checked = u.devices === 'all'; $('#uAll').onchange(); document.querySelectorAll('.uDev').forEach(c => c.checked = u.devices !== 'all' && u.devices.includes(+c.value)); $('#uMsg').textContent = `Editing ${u.name}: leave the password empty to keep it`; });
+  $('#usersTable').querySelectorAll('[data-del]').forEach(b => b.onclick = async () => { if (!confirm(`Remove user ${b.dataset.del}?`)) return;
+    const j = await fetch('/users', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: b.dataset.del }) }).then(r => r.json()); $('#uMsg').textContent = j.ok ? `Removed ${b.dataset.del}` : 'Error: ' + j.error; if (j.ok) openUsers(); });
+}
+$('#uSave').onclick = async () => {
+  const body = { name: $('#uName').value, admin: $('#uAdmin').checked, devices: $('#uAll').checked ? 'all' : [...document.querySelectorAll('.uDev:checked')].map(c => +c.value) };
+  if ($('#uPw').value) body.pw = $('#uPw').value;
+  const j = await fetch('/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(r => r.json());
+  $('#uMsg').textContent = j.ok ? `Saved ${j.user.name}` : 'Error: ' + j.error;
+  if (j.ok) { $('#uName').value = ''; $('#uPw').value = ''; openUsers(); }
+};
+$('#usersBtn').onclick = openUsers;
+$('#usersClose').onclick = () => $('#users').classList.remove('open');
 $('#insightsClose').onclick = () => $('#insights').classList.remove('open');
 $('#insights .tabs').querySelectorAll('button').forEach(b => b.onclick = () => { insRange = b.dataset.range; $('#insights .tabs .on')?.classList.remove('on'); b.classList.add('on'); renderInsights(); });
 
@@ -260,7 +310,7 @@ async function refresh() {
   const { user, admin, devices } = await r.json();
   state.user = user; state.admin = admin; state.devices = devices; statusCache = devices;
   $('#who').textContent = `signed in as ${user}${admin ? ' (admin)' : ''}`;
-  $('#insightsBtn').style.display = admin ? '' : 'none';
+  $('#insightsBtn').style.display = admin ? '' : 'none'; $('#usersBtn').style.display = admin ? '' : 'none';
   for (const d of devices) if (!$(`#grid [data-id="${d.id}"]`)) $('#grid').appendChild(phoneView(d, false));
   refreshStatus();
 }
