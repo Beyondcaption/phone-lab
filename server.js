@@ -17,7 +17,10 @@ const IOS = fs.existsSync(path.join(ROOT, 'bin', 'ios')) ? path.join(ROOT, 'bin'
 const WDA_APP = path.join(ROOT, 'wda', 'WebDriverAgentRunner-Runner.app');
 const BUNDLE = CFG.wda_bundle_id + '.xctrunner';
 // waitForIdleTimeout 0 und animationCoolOffTimeout 0: WDA wartet nicht auf Ruhe der App, Eingaben kommen sofort an
-const SETTINGS = { mjpegServerFramerate: 15, mjpegScalingFactor: 60, mjpegServerScreenshotQuality: 50, waitForIdleTimeout: 0, animationCoolOffTimeout: 0 };
+// Stream klein halten, damit er auch über das Internet flüssig bleibt. Die JPEG-Qualität ignoriert WDA, wirksam sind Bildrate und Größe.
+// Raster: 6 Bilder/s bei 30 % (etwa 2 Mbit/s je Handy). Focus: 10 Bilder/s bei 45 % (etwa 7 Mbit/s), nur für das eine Handy, das groß offen ist.
+const QUALITY = { low: { mjpegServerFramerate: 6, mjpegScalingFactor: 30 }, high: { mjpegServerFramerate: 10, mjpegScalingFactor: 45 } };
+const SETTINGS = { ...QUALITY.low, waitForIdleTimeout: 0, animationCoolOffTimeout: 0 };
 
 fs.mkdirSync(path.join(ROOT, 'logs'), { recursive: true });
 const logFile = name => fs.openSync(path.join(ROOT, 'logs', name), 'a');
@@ -104,6 +107,7 @@ const cmd = {
   },
   text: (dev, { text }) => withSession(dev, sid => wda(dev, 'POST', `/session/${sid}/wda/keys`, { value: [String(text)] })),
   home: dev => wda(dev, 'POST', '/wda/homescreen'),
+  quality: (dev, { level }) => withSession(dev, sid => wda(dev, 'POST', `/session/${sid}/appium/settings`, { settings: QUALITY[level] || QUALITY.low })),
   instagram: dev => withSession(dev, sid => wda(dev, 'POST', `/session/${sid}/wda/apps/launch`, { bundleId: INSTAGRAM })),
 };
 
@@ -196,6 +200,39 @@ function insights() {
     devices: CFG.devices.map(d => ({ name: d.name, ready: !!d.ready, lockedBy: d.lockedBy && now - d.lockAt < LOCK_MS ? d.lockedBy : null })) };
 }
 
+// ---------- MJPEG-Verteiler: eine Verbindung je Handy, alle Zuschauer bekommen die Bilder daraus.
+// Ein Zuschauer, dessen Leitung nicht nachkommt, bekommt Bilder ausgelassen statt einen wachsenden Rückstand (sonst hinkt die Anzeige immer weiter nach).
+const streams = new Map();
+function streamClient(dev, res) {
+  let st = streams.get(dev.id);
+  if (!st) { st = { clients: new Set(), buf: Buffer.alloc(0), req: null, frames: 0 }; streams.set(dev.id, st); connectUpstream(dev, st); }
+  res.writeHead(200, { 'Content-Type': 'multipart/x-mixed-replace; boundary=frame', 'Cache-Control': 'no-cache', Connection: 'close' });
+  st.clients.add(res);
+  res.on('close', () => { st.clients.delete(res); if (!st.clients.size) { if (st.req) st.req.destroy(); streams.delete(dev.id); } });
+}
+function connectUpstream(dev, st) {
+  const retry = () => { st.req = null; if (streams.get(dev.id) === st && st.clients.size) setTimeout(() => connectUpstream(dev, st), 2000); };
+  const req = http.request({ host: '127.0.0.1', port: dev.mjpeg_port, path: '/', method: 'GET' }, up => {
+    up.on('data', chunk => {
+      st.buf = st.buf.length ? Buffer.concat([st.buf, chunk]) : chunk;
+      for (;;) {   // WDA schickt je Bild: Kopf mit Content-Length, Leerzeile, JPEG
+        const m = /Content-Length:\s*(\d+)\r\n\r\n/i.exec(st.buf.subarray(0, 300).toString('latin1'));
+        if (!m) { if (st.buf.length > 4000000) st.buf = Buffer.alloc(0); break; }
+        const start = m.index + m[0].length, len = +m[1];
+        if (st.buf.length < start + len) break;
+        broadcast(st, st.buf.subarray(start, start + len)); st.buf = st.buf.subarray(start + len);
+      }
+    });
+    up.on('end', retry); up.on('error', retry);
+  });
+  st.req = req; req.on('error', retry); req.end();
+}
+function broadcast(st, frame) {
+  st.frames++;
+  const head = Buffer.from(`--frame\r\nContent-Type: image/jpeg\r\nContent-Length: ${frame.length}\r\n\r\n`);
+  for (const res of st.clients) { if (res.writableNeedDrain) continue; res.write(Buffer.concat([head, frame, Buffer.from('\r\n')])); }
+}
+
 // ---------- HTTP ----------
 function json(res, code, obj) { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(obj)); }
 function rawBody(req) { return new Promise(r => { let b = ''; req.on('data', c => b += c); req.on('end', () => r(b)); }); }
@@ -280,14 +317,9 @@ const server = http.createServer(async (req, res) => {
   }
   const dev = CFG.devices.find(d => String(d.id) === idStr);
   if (!dev || !allowed(user, dev)) return json(res, 404, { error: 'unknown phone' });
-  if (req.method === 'GET' && route === 'stream') {
-    const up = http.request({ host: '127.0.0.1', port: dev.mjpeg_port, path: '/', method: 'GET' }, upRes => {
-      res.writeHead(200, { 'Content-Type': upRes.headers['content-type'] || 'multipart/x-mixed-replace; boundary=--BoundaryString', 'Cache-Control': 'no-cache' });
-      upRes.pipe(res);
-    });
-    up.on('error', () => { if (!res.headersSent) res.writeHead(502); res.end(); });
-    res.on('close', () => up.destroy());
-    return up.end();
+  if (req.method === 'GET' && route === 'stream') return streamClient(dev, res);
+  if (req.method === 'POST' && route === 'cmd' && action === 'quality') {
+    try { await cmd.quality(dev, await body(req)); return json(res, 200, { ok: true }); } catch (e) { return json(res, 502, { ok: false, error: e.message }); }
   }
   if (req.method === 'POST' && route === 'cmd' && cmd[action]) {
     // Sperre: belegt, solange ein anderer in den letzten 2 min einen Befehl geschickt hat

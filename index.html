@@ -232,8 +232,10 @@ function openFocus(id) {
   $('#focusPhones').innerHTML = state.devices.map(x => `<button data-f="${x.id}" class="${x.id === id ? 'on' : ''}">${x.name}</button>`).join('');
   $('#focusPhones').querySelectorAll('button').forEach(b => b.onclick = () => openFocus(+b.dataset.f));
   $('#focus').classList.add('open'); refreshStatus();
+  // the phone in focus streams larger and faster, everything else stays small
+  state.devices.forEach(x => post(x.id, 'quality', { level: x.id === id ? 'high' : 'low' }));
 }
-function closeFocus() { state.focusId = null; $('#focus').classList.remove('open'); $('#focusTile').innerHTML = ''; }
+function closeFocus() { if (state.focusId != null) post(state.focusId, 'quality', { level: 'low' }); state.focusId = null; $('#focus').classList.remove('open'); $('#focusTile').innerHTML = ''; }
 $('#focusClose').onclick = closeFocus;
 $('#focus').addEventListener('click', e => { if (e.target === $('#focus')) closeFocus(); });
 document.addEventListener('keydown', e => {
