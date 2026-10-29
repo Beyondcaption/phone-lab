@@ -42,13 +42,17 @@ Der Betriebs-Mac braucht kein Internet, außer wenn ein iPhone eine iOS-Version 
 
 ## Verschicken als App (empfohlen)
 
-Entwicklungs-Mac: `./make-app.sh` baut phone-lab.app.zip auf dem Schreibtisch (Version zählt automatisch hoch, steht in VERSION).
-Zip verschicken (AirDrop, Drive, Messenger). Empfänger: Zip doppelklicken, dann einmalig im Terminal
-`xattr -dr com.apple.quarantine ~/Downloads/phone-lab.app` (Pfad anpassen), danach Doppelklick auf phone-lab.app.
-Die App findet eine bestehende Installation (Ordner mit users.json unter ~/phone-lab oder ~/Desktop/phone-lab), ersetzt dort nur die
-Programmdateien, behält Benutzer, Logs, Schlüssel und Pairings, legt eine Sicherung unter phone-lab.vorher an und öffnet ein
-Terminal mit der Einrichtung (Autostart, Neustart). Ohne bestehende Installation installiert sie nach ~/phone-lab.
-Rückschritt: Ordner phone-lab durch phone-lab.vorher ersetzen (users.json und logs vorher rüberkopieren), Server neu starten.
+Entwicklungs-Mac: `./make-app.sh` baut phone-lab-<version>.dmg auf dem Schreibtisch, `./make-app.sh --release "Notiz"` lädt es
+zusätzlich als Release nach https://github.com/Beyondcaption/phone-lab/releases hoch. Version steht in VERSION und zählt automatisch hoch.
+
+Betriebs-Mac: DMG öffnen, phone-lab in den Programme-Ordner ziehen, dort doppelklicken. Beim ersten Mal blockt macOS die
+unsignierte App: Systemeinstellungen > Datenschutz & Sicherheit > "Dennoch öffnen", oder im Terminal
+`xattr -dr com.apple.quarantine /Applications/phone-lab.app`. Die App fragt beim ersten Start nach einem Admin-Namen und
+Passwort (oder übernimmt Benutzer, Einstellungen und Logs aus einer älteren Installation unter ~/phone-lab oder ~/Desktop/phone-lab),
+richtet den Autostart ein, startet die Tailscale-Freigabe, wenn Tailscale installiert ist, und öffnet das Dashboard.
+
+Daten liegen unter ~/Library/Application Support/phone-lab (users.json, settings.json, logs, devimages, Pairing). Update: neue DMG,
+App im Programme-Ordner ersetzen, einmal doppelklicken. Die App läuft als Hintergrunddienst (kein Dock-Symbol), Doppelklick öffnet nur das Dashboard.
 
 ## Aktualisieren von Hand
 

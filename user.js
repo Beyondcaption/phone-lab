@@ -7,7 +7,7 @@
 //   node user.js remove <name>
 'use strict';
 const fs = require('fs'), path = require('path'), crypto = require('crypto');
-const FILE = path.join(__dirname, 'users.json');
+const FILE = path.join(process.env.PHONELAB_DATA || __dirname, 'users.json');
 const load = () => { try { return JSON.parse(fs.readFileSync(FILE, 'utf8')); } catch { return { users: [] }; } };
 const save = db => fs.writeFileSync(FILE, JSON.stringify(db, null, 2) + '\n', { mode: 0o600 });
 const [cmd, name, ...rest] = process.argv.slice(2);

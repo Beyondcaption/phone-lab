@@ -1,83 +1,57 @@
 #!/bin/zsh
-# Nur Entwicklungs-Mac. Baut phone-lab.app (Doppelklick installiert oder aktualisiert), signiert und beglaubigt sie,
-# wenn ein Developer-ID-Zertifikat und Zugangsdaten in .env vorhanden sind, und legt phone-lab.app.zip auf den Schreibtisch.
+# Nur Entwicklungs-Mac. Baut phone-lab.app (läuft direkt aus dem Programme-Ordner, Daten unter
+# ~/Library/Application Support/phone-lab) und packt sie als DMG. Version zählt automatisch hoch.
+# Mit --release wird das DMG als GitHub-Release hochgeladen.
 set -e
 DIR=$(cd "$(dirname "$0")" && pwd); cd "$DIR"
 [[ -d wda/WebDriverAgentRunner-Runner.app ]] || { echo "wda/ fehlt, erst ./build-wda.sh"; exit 1; }
 [[ -x bin/node && -x bin/ios ]] || { echo "bin/ fehlt, erst ./make-package.sh"; exit 1; }
-[[ -f .env ]] && set -a && source .env && set +a
 
-# Version hochzählen: Datum plus Zähler
 TODAY=$(date +%Y.%m.%d); OLD=$(cat VERSION 2>/dev/null || echo "")
 if [[ "$OLD" == "$TODAY-"* ]]; then N=$(( ${OLD##*-} + 1 )); else N=1; fi
 echo "$TODAY-$N" > VERSION; VER=$(cat VERSION); echo "Version $VER"
 
-APP=/tmp/phone-lab-app-build/phone-lab.app; rm -rf /tmp/phone-lab-app-build; mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources/payload"
-P="$APP/Contents/Resources/payload"
-# Programmdateien. Keine Benutzer, keine Logs, keine Schlüssel, keine Pairings.
-cp VERSION server.js index.html usbmux.js plist.js add-device.js user.js setup.sh install-launchd.sh smoke.sh Start.command devices.json README.md BRIEF.md .gitignore "$P/"
-mkdir -p "$P/bin"; cp bin/node bin/ios "$P/bin/"
-# WDA und Entwicklerbilder als Zip, damit die Beglaubigung die iOS-Binärdateien nicht prüft
-(cd "$DIR" && ditto -c -k wda "$P/wda.zip" && ditto -c -k devimages "$P/devimages.zip")
+B=/tmp/phone-lab-app-build; rm -rf "$B"; mkdir -p "$B"
+APP="$B/phone-lab.app"; R="$APP/Contents/Resources/app"
+mkdir -p "$APP/Contents/MacOS" "$R/bin"
+cp VERSION server.js index.html usbmux.js plist.js user.js devices.json README.md "$R/"
+cp bin/node bin/ios "$R/bin/"; cp -R wda "$R/wda"; cp -R devimages "$R/devimages"
+cp "$DIR/app/launcher.sh" "$APP/Contents/MacOS/phone-lab"; chmod +x "$APP/Contents/MacOS/phone-lab" "$R/bin/"*
 
-cat > "$APP/Contents/MacOS/phone-lab" <<'L'
-#!/bin/zsh
-# Startprogramm der App: installiert phone-lab oder aktualisiert eine bestehende Installation.
-P="$(cd "$(dirname "$0")/../Resources/payload" && pwd)"
-VER=$(cat "$P/VERSION")
-# Zielordner: bestehende Installation weiterverwenden, sonst Benutzerordner
-D="${PHONELAB_DIR:-}"
-if [[ -z "$D" ]]; then
-  for c in ~/phone-lab ~/Desktop/phone-lab; do [[ -f "$c/users.json" ]] && D="$c" && break; done
-  [[ -z "$D" ]] && D=~/phone-lab
+# Symbol
+if [[ ! -f "$DIR/app/phone-lab.icns" ]]; then
+  swift "$DIR/app/icon.swift" "$B/icon.png" && mkdir -p "$B/icon.iconset" && for s in 16 32 64 128 256 512 1024; do sips -z $s $s "$B/icon.png" --out "$B/icon.iconset/icon_${s}x${s}.png" >/dev/null; done \
+    && cp "$B/icon.iconset/icon_32x32.png" "$B/icon.iconset/icon_16x16@2x.png" && cp "$B/icon.iconset/icon_64x64.png" "$B/icon.iconset/icon_32x32@2x.png" \
+    && cp "$B/icon.iconset/icon_256x256.png" "$B/icon.iconset/icon_128x128@2x.png" && cp "$B/icon.iconset/icon_512x512.png" "$B/icon.iconset/icon_256x256@2x.png" \
+    && cp "$B/icon.iconset/icon_1024x1024.png" "$B/icon.iconset/icon_512x512@2x.png" && rm "$B/icon.iconset/icon_64x64.png" "$B/icon.iconset/icon_1024x1024.png" \
+    && iconutil -c icns "$B/icon.iconset" -o "$DIR/app/phone-lab.icns" || echo "HINWEIS: Symbol konnte nicht erzeugt werden"
 fi
-mkdir -p "$D"
-# Sicherung der alten Programmdateien für einen Rückschritt
-[[ -f "$D/VERSION" ]] && rm -rf "$D.vorher" && rsync -a --exclude logs --exclude users.json "$D/" "$D.vorher/"
-# Programmdateien ersetzen, Benutzer, Logs, Schlüssel und Pairings bleiben
-rsync -a --exclude users.json --exclude settings.json --exclude logs --exclude .env --exclude selfIdentity.plist --exclude wda.zip --exclude devimages.zip "$P/" "$D/"
-rm -rf "$D/wda" "$D/devimages"; ditto -x -k "$P/wda.zip" "$D/wda"; ditto -x -k "$P/devimages.zip" "$D/devimages"
-chmod +x "$D"/*.sh "$D"/*.command "$D"/bin/* "$D"/*.js
-xattr -dr com.apple.quarantine "$D" 2>/dev/null || true
-# Einrichtung oder Neustart im Terminal, damit man sieht, was passiert
-if [[ -n "$PHONELAB_DIR" ]]; then echo "installiert nach $D, Version $VER"; exit 0; fi
-osascript -e "tell application \"Terminal\" to do script \"cd '$D' && ./setup.sh; echo; echo 'phone-lab Version $VER'\"" -e 'tell application "Terminal" to activate' >/dev/null
-L
-chmod +x "$APP/Contents/MacOS/phone-lab"
+[[ -f "$DIR/app/phone-lab.icns" ]] && cp "$DIR/app/phone-lab.icns" "$APP/Contents/Resources/phone-lab.icns"
+
 cat > "$APP/Contents/Info.plist" <<I
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
   <key>CFBundleName</key><string>phone-lab</string>
   <key>CFBundleDisplayName</key><string>phone-lab</string>
-  <key>CFBundleIdentifier</key><string>com.cansap.phonelab.installer</string>
+  <key>CFBundleIdentifier</key><string>com.cansap.phonelab</string>
   <key>CFBundleVersion</key><string>$VER</string>
   <key>CFBundleShortVersionString</key><string>$VER</string>
   <key>CFBundleExecutable</key><string>phone-lab</string>
+  <key>CFBundleIconFile</key><string>phone-lab</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
-  <key>NSHumanReadableCopyright</key><string>phone-lab</string>
+  <key>LSUIElement</key><true/>
 </dict></plist>
 I
 
-# Signieren und beglaubigen, wenn möglich
-ID=$(security find-identity -v -p codesigning | grep -o '"Developer ID Application: [^"]*"' | head -1 | tr -d '"')
-if [[ -n "$ID" ]]; then
-  echo "Signiere mit: $ID"
-  for b in "$P/bin/node" "$P/bin/ios"; do codesign --force --options runtime --timestamp --sign "$ID" "$b"; done
-  codesign --force --options runtime --timestamp --sign "$ID" "$APP"
-  codesign --verify --deep --strict "$APP" && echo "Signatur ok"
-  if [[ -n "$NOTARY_APPLE_ID" && -n "$NOTARY_PASSWORD" && -n "$NOTARY_TEAM_ID" ]]; then
-    ditto -c -k --keepParent "$APP" /tmp/phone-lab-app-build/notarize.zip
-    echo "Beglaubigung bei Apple (einige Minuten) ..."
-    xcrun notarytool submit /tmp/phone-lab-app-build/notarize.zip --apple-id "$NOTARY_APPLE_ID" --password "$NOTARY_PASSWORD" --team-id "$NOTARY_TEAM_ID" --wait 2>&1 | grep -E 'status|id:' | head -4
-    xcrun stapler staple "$APP" && echo "Beglaubigung angeheftet"
-  else
-    echo "HINWEIS: keine Beglaubigungsdaten in .env (NOTARY_APPLE_ID, NOTARY_PASSWORD, NOTARY_TEAM_ID), App ist signiert, aber nicht beglaubigt."
-  fi
-else
-  echo "HINWEIS: kein Developer-ID-Zertifikat, App ist unsigniert. Empfänger muss einmal: xattr -dr com.apple.quarantine phone-lab.app"
-fi
-OUT=~/Desktop/phone-lab.app.zip; rm -f "$OUT"; ditto -c -k --keepParent "$APP" "$OUT"
+# DMG: App plus Verknüpfung auf Programme, zum Reinziehen
+D="$B/dmg"; mkdir -p "$D"; cp -R "$APP" "$D/"; ln -s /Applications "$D/Applications"
+OUT=~/Desktop/phone-lab-$VER.dmg; rm -f "$OUT"
+hdiutil create -volname "phone-lab $VER" -srcfolder "$D" -ov -format UDZO "$OUT" >/dev/null
+echo "DMG: $OUT ($(du -h "$OUT" | cut -f1))"
+
 git -C "$DIR" add VERSION >/dev/null 2>&1 || true
-echo "App: $OUT ($(du -h "$OUT" | cut -f1)), Version $VER"
+if [[ "$1" == "--release" ]]; then
+  gh release create "v$VER" "$OUT" --repo Beyondcaption/phone-lab --title "phone-lab $VER" --notes "${2:-Update $VER}" && echo "Release v$VER hochgeladen"
+fi

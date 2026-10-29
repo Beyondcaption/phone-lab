@@ -9,7 +9,8 @@ const { spawn } = require('child_process');
 const crypto = require('crypto');
 const usbmux = require('./usbmux');
 
-const ROOT = __dirname;
+const ROOT = __dirname;                                   // Programmdateien (in der App unveränderlich)
+const DATA = process.env.PHONELAB_DATA || ROOT;           // Daten: Benutzer, Einstellungen, Logs, Entwicklerbilder, Pairings
 const CFG = JSON.parse(fs.readFileSync(path.join(ROOT, 'devices.json'), 'utf8'));
 const PORT = 3000;
 const INSTAGRAM = 'com.burbn.instagram';
@@ -27,22 +28,23 @@ const QUALITY = {
 };
 const SETTINGS = { ...QUALITY.normal, waitForIdleTimeout: 0, animationCoolOffTimeout: 0 };
 
-fs.mkdirSync(path.join(ROOT, 'logs'), { recursive: true });
-const logFile = name => fs.openSync(path.join(ROOT, 'logs', name), 'a');
+fs.mkdirSync(path.join(DATA, 'logs'), { recursive: true });
+if (!fs.existsSync(path.join(DATA, 'devimages')) && fs.existsSync(path.join(ROOT, 'devimages'))) fs.cpSync(path.join(ROOT, 'devimages'), path.join(DATA, 'devimages'), { recursive: true });
+const logFile = name => fs.openSync(path.join(DATA, 'logs', name), 'a');
 
 // ---------- Einstellungen: Textbausteine, Notizen, Beschriftungen, Tagesziele (vom Admin gepflegt) ----------
-const SETTINGS_FILE = path.join(ROOT, 'settings.json');
+const SETTINGS_FILE = path.join(DATA, 'settings.json');
 const loadSettings = () => { try { return { snippets: { global: [], phone: {} }, notes: {}, labels: {}, targets: {}, ...JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')) }; } catch { return { snippets: { global: [], phone: {} }, notes: {}, labels: {}, targets: {} }; } };
 const APPS = CFG.apps || { Instagram: INSTAGRAM };
 
 // ---------- Benutzer, Login-Sitzungen, Protokoll ----------
-const USERS_FILE = path.join(ROOT, 'users.json');
+const USERS_FILE = path.join(DATA, 'users.json');
 const users = () => { try { return JSON.parse(fs.readFileSync(USERS_FILE, 'utf8')).users; } catch { return []; } };
 const sessions = new Map();           // token -> { name, admin, devices, ip }
 const loginFails = new Map();         // name|ip -> { n, until }
 const LOCK_MS = 120000;               // Handy gilt als belegt, solange der letzte Befehl jünger als 2 min ist
 function protokoll(user, ip, text) {
-  fs.appendFileSync(path.join(ROOT, 'logs', 'zugriff.log'), `${new Date().toISOString()} ${user || '-'} ${ip} ${text}\n`);
+  fs.appendFileSync(path.join(DATA, 'logs', 'zugriff.log'), `${new Date().toISOString()} ${user || '-'} ${ip} ${text}\n`);
 }
 function checkPassword(u, pw) {
   return crypto.timingSafeEqual(crypto.scryptSync(pw, Buffer.from(u.salt, 'hex'), 32), Buffer.from(u.hash, 'hex'));
@@ -132,14 +134,14 @@ const cmd = {
 // ---------- go-ios ----------
 function ios(args, log) {
   return new Promise((resolve, reject) => {
-    const p = spawn(IOS, args, { cwd: ROOT, stdio: ['ignore', log, log] });
+    const p = spawn(IOS, args, { cwd: DATA, stdio: ['ignore', log, log] });
     p.on('exit', code => code === 0 ? resolve() : reject(new Error(`ios ${args[0]} beendet mit ${code}`)));
     p.on('error', reject);
   });
 }
 function iosOut(args) {
   return new Promise(resolve => {
-    let out = ''; const p = spawn(IOS, args, { cwd: ROOT });
+    let out = ''; const p = spawn(IOS, args, { cwd: DATA });
     p.stdout.on('data', d => out += d); p.stderr.on('data', d => out += d);
     p.on('exit', () => resolve(out)); p.on('error', () => resolve(''));
   });
@@ -148,7 +150,7 @@ function iosOut(args) {
 // Ein Tunnel-Dienst für alle Geräte (iOS 17+), ohne Admin-Rechte. Koppelt neue Geräte selbst (Dialog auf dem iPhone).
 async function ensureTunnel() {
   if (!(await iosOut(['tunnel', 'ls'])).includes('agent is not running')) return;
-  const child = spawn(IOS, ['tunnel', 'start', '--userspace'], { cwd: ROOT, stdio: ['ignore', logFile('tunnel.log'), logFile('tunnel.log')] });
+  const child = spawn(IOS, ['tunnel', 'start', '--userspace'], { cwd: DATA, stdio: ['ignore', logFile('tunnel.log'), logFile('tunnel.log')] });
   console.log(`Tunnel gestartet (pid ${child.pid})`);
   child.on('exit', code => { console.log(`Tunnel beendet (code ${code}), Neustart in 5 s`); setTimeout(ensureTunnel, 5000); });
 }
@@ -162,7 +164,7 @@ async function startWda(dev) {
   try {
     if (!(await usbmux.listDevices()).some(d => d.udid === dev.udid)) throw new Error('nicht per USB verbunden');
     await ios(['image', 'auto', '--udid=' + dev.udid], log);
-    const marker = path.join(ROOT, 'logs', `installed-${dev.udid}`);
+    const marker = path.join(DATA, 'logs', `installed-${dev.udid}`);
     if (!fs.existsSync(marker) || fs.statSync(marker).mtimeMs < fs.statSync(WDA_APP).mtimeMs) {
       await ios(['install', '--path=' + WDA_APP, '--udid=' + dev.udid], log);
       fs.writeFileSync(marker, new Date().toISOString());
@@ -173,7 +175,7 @@ async function startWda(dev) {
     return setTimeout(() => startWda(dev), 15000);
   }
   const child = spawn(IOS, ['runwda', '--bundleid=' + BUNDLE, '--testrunnerbundleid=' + BUNDLE, '--xctestconfig=WebDriverAgentRunner.xctest',
-    '--env=USE_PORT=8100', '--env=MJPEG_SERVER_PORT=9100', '--udid=' + dev.udid], { cwd: ROOT, stdio: ['ignore', log, log] });
+    '--env=USE_PORT=8100', '--env=MJPEG_SERVER_PORT=9100', '--udid=' + dev.udid], { cwd: DATA, stdio: ['ignore', log, log] });
   dev.proc = child;
   console.log(`[${dev.name}] WDA gestartet (pid ${child.pid})`);
   child.on('exit', code => {
@@ -201,7 +203,7 @@ async function health(dev) {
 
 // Insights: aus logs/zugriff.log Sitzungen je Benutzer und Handy bilden. Befehle mit höchstens 2 min Abstand gehören zusammen.
 function insights() {
-  let lines = []; try { lines = fs.readFileSync(path.join(ROOT, 'logs', 'zugriff.log'), 'utf8').trim().split('\n'); } catch {}
+  let lines = []; try { lines = fs.readFileSync(path.join(DATA, 'logs', 'zugriff.log'), 'utf8').trim().split('\n'); } catch {}
   const sessions = [], open = new Map(), events = [];
   for (const line of lines) {
     const m = /^(\S+) (\S+) (\S+) (.*)$/.exec(line); if (!m) continue;
@@ -385,6 +387,7 @@ const server = http.createServer(async (req, res) => {
 (async () => {
   if (!fs.existsSync(WDA_APP)) { console.error(`WDA-App fehlt: ${WDA_APP}. Auf einem Mac mit Xcode ./build-wda.sh ausführen.`); process.exit(1); }
   if (!users().length) { console.error('Keine Benutzer. Erst anlegen: node user.js add <name> --admin'); process.exit(1); }
+  console.log(`Daten in ${DATA}`);
   await ensureTunnel();
   for (const dev of CFG.devices) {
     usbmux.forward(dev.udid, 8100, dev.wda_port);
