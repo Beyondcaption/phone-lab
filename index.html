@@ -167,7 +167,8 @@
   /* ---------- focus ---------- */
   #focus { position: fixed; inset: 0; background: var(--ground); display: none; z-index: 20; padding: 24px 29px; overflow: auto; }
   #focus.open { display: flex; gap: var(--gap); align-items: flex-start; justify-content: center; flex-wrap: wrap; }
-  #focus .tile { width: min(440px, 100%); }
+  #focusTile { flex: 0 1 440px; width: min(440px, 100%); min-width: 260px; }   /* Breite am Wrapper, nicht an der Kachel: .tile hat container-type und darum keine Eigenbreite (Safari quetscht sie sonst zusammen) */
+  #focus .tile { width: 100%; }
   #focus .side { width: 340px; max-width: 100%; background: var(--surface); border-radius: var(--radius-card); padding: var(--pad); display: flex; flex-direction: column; gap: 16px; }
   #focus .side h3 { margin: 0; font-size: 13px; font-weight: 500; color: var(--muted); }
   #focus .phones { display: flex; flex-wrap: wrap; gap: 6px; }
