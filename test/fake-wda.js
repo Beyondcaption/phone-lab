@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Spielt WDA und den MJPEG-Strom für alle Handys aus devices.json nach, für Tests ohne iPhone (Windows, CI).
 // Jeder Eingabe-Aufruf dauert 150 ms wie ein echter XCTest-Aufruf. Zählt, ob Aufrufe parallel ankommen.
-// FAKE_STOP=3 zeigt auf Handy 3 einen Sperrhinweis im Bildschirmtext. Stats: GET http://127.0.0.1:<wda_port>/fake/stats
+// Stats: GET http://127.0.0.1:<wda_port>/fake/stats
 'use strict';
 const http = require('http');
 const fs = require('fs');
@@ -9,7 +9,6 @@ const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
 const CFG = JSON.parse(fs.readFileSync(path.join(ROOT, 'devices.json'), 'utf8'));
-const STOP = String(process.env.FAKE_STOP || '').split(',').filter(Boolean).map(Number);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 // FAKE_SLOW=5: Handy 5 braucht 10 s je Eingabe und für den Bildschirmtext (ein hängendes WDA)
 const SLOW = String(process.env.FAKE_SLOW || '').split(',').filter(Boolean).map(Number);
@@ -30,7 +29,7 @@ for (const dev of CFG.devices) {
     if (u.endsWith('/wda/batteryInfo')) return send({ level: 0.5 + dev.id / 20, state: 2 });
     if (u.endsWith('/wda/activeAppInfo')) return send({ bundleId: s.app });
     if (u.includes('/source') && SLOW.includes(dev.id)) await sleep(10000);
-    if (u.includes('/source')) return send(`<XCUIElementTypeApplication name="Instagram">${STOP.includes(dev.id) ? '<XCUIElementTypeStaticText label="We suspect automated behavior on your account"/>' : '<XCUIElementTypeStaticText label="Reels"/>'}</XCUIElementTypeApplication>`);
+    if (u.includes('/source')) return send(`<XCUIElementTypeApplication name="Instagram"><XCUIElementTypeStaticText label="Reels"/></XCUIElementTypeApplication>`);
     if (u.endsWith('/element') && req.method === 'POST') { res.writeHead(404, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify({ value: { error: 'no such element' } })); }
     // Eingaben: dauern 150 ms, Parallelität wird gezählt
     s.calls++; s.active++; s.maxParallel = Math.max(s.maxParallel, s.active);
@@ -54,4 +53,4 @@ for (const dev of CFG.devices) {
     req.on('close', () => clearInterval(t));
   }).listen(dev.mjpeg_port, '127.0.0.1');
 }
-console.log(`fake WDA für ${CFG.devices.length} Handys${STOP.length ? ', Sperrhinweis auf ' + STOP.join(',') : ''}`);
+console.log(`fake WDA für ${CFG.devices.length} Handys`);

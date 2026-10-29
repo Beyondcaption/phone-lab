@@ -1,6 +1,6 @@
-// phone-lab.app: ein Programm für den Mac mit den iPhones. Richtet beim Start die Dienste ein (launcher.sh: Server und
-// Warmup-Dienst unter launchd, Tailscale-Freigabe) und zeigt das Dashboard in einem eigenen Fenster mit Dock-Symbol.
-// Die Dienste laufen weiter, wenn das Fenster zu ist; ein Klick aufs Symbol öffnet es wieder.
+// phone-lab.app: ein Programm für den Mac mit den iPhones. Richtet beim Start den Server ein (launcher.sh: Dienst unter
+// launchd, Tailscale-Freigabe) und zeigt das Dashboard in einem eigenen Fenster mit Dock-Symbol.
+// Der Server läuft weiter, wenn das Fenster zu ist; ein Klick aufs Symbol öffnet es wieder.
 // Gebaut von make-app.sh (swiftc, nur Entwicklungs-Mac). Kein Browser, keine Zusatzpakete.
 import Cocoa
 import WebKit
