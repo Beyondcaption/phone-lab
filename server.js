@@ -184,7 +184,7 @@ function insights() {
     const m = /^(\S+) (\S+) (\S+) (.*)$/.exec(line); if (!m) continue;
     const [, ts, name, ip, text] = m, t = Date.parse(ts);
     events.push({ time: ts, user: name, ip, text });
-    const dm = /^(Handy \d+) (\w+)/.exec(text); if (!dm) continue;
+    const dm = /^((?:Handy|Phone) \d+) (\w+)/.exec(text); if (!dm) continue;
     const key = name + '|' + dm[1], cur = open.get(key);
     if (cur && t - cur.end <= LOCK_MS) { cur.end = t; cur.actions++; cur.counts[dm[2]] = (cur.counts[dm[2]] || 0) + 1; }
     else { const sess = { user: name, phone: dm[1], start: t, end: t, actions: 1, counts: { [dm[2]]: 1 } }; sessions.push(sess); open.set(key, sess); }
@@ -215,7 +215,7 @@ const server = http.createServer(async (req, res) => {
     const u = users().find(x => x.name === name);
     if (!u || !checkPassword(u, pw)) {
       const n = (f ? f.n : 0) + 1; loginFails.set(key, { n, until: n >= 5 ? Date.now() + 60000 : 0 });
-      protokoll(name, ip, 'login fehlgeschlagen'); return html(401, LOGIN_HTML('Wrong username or password'));
+      protokoll(name, ip, 'login failed'); return html(401, LOGIN_HTML('Wrong username or password'));
     }
     loginFails.delete(key);
     const token = crypto.randomBytes(24).toString('hex');
@@ -259,10 +259,10 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'POST' && route === 'cmd' && cmd[action]) {
     // Sperre: belegt, solange ein anderer in den letzten 2 min einen Befehl geschickt hat
     if (dev.lockedBy && dev.lockedBy !== user.name && Date.now() - dev.lockAt < LOCK_MS) return json(res, 409, { ok: false, error: `${dev.name} is in use by ${dev.lockedBy}` });
-    if (dev.lockedBy !== user.name) protokoll(user.name, ip, `übernimmt ${dev.name}`);
+    if (dev.lockedBy !== user.name) protokoll(user.name, ip, `takes over ${dev.name}`);
     dev.lockedBy = user.name; dev.lockAt = Date.now();
     const b = await body(req);
-    protokoll(user.name, ip, `${dev.name} ${action}${action === 'text' ? ' (' + String(b.text || '').length + ' Zeichen)' : ''}`);
+    protokoll(user.name, ip, `${dev.name} ${action}${action === 'text' ? ' (' + String(b.text || '').length + ' chars)' : ''}`);
     try { await cmd[action](dev, b); return json(res, 200, { ok: true }); }
     catch (e) { return json(res, 502, { ok: false, error: e.message }); }
   }

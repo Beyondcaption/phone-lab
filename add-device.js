@@ -27,8 +27,8 @@ const lastJson = s => { const lines = s.trim().split('\n').filter(l => l.startsW
     if (known.has(udid)) { console.log(`bekannt: ${cfg.devices.find(d => d.udid === udid).name} = ${udid} (${name}, iOS ${ver}), Entwicklermodus ${devmode}`); }
     else {
       const n = Math.max(0, ...cfg.devices.map(d => d.id)) + 1;
-      cfg.devices.push({ id: n, name: `Handy ${n}`, udid, wda_port: 8100 + n, mjpeg_port: 9100 + n });
-      added++; console.log(`neu: Handy ${n} = ${udid} (${name}, iOS ${ver}), Entwicklermodus ${devmode}`);
+      cfg.devices.push({ id: n, name: `Phone ${n}`, udid, wda_port: 8100 + n, mjpeg_port: 9100 + n });
+      added++; console.log(`neu: Phone ${n} = ${udid} (${name}, iOS ${ver}), Entwicklermodus ${devmode}`);
     }
     if (devmode === 'AUS') {
       ios(['devmode', 'reveal', '--udid=' + udid]);

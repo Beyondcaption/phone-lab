@@ -172,7 +172,8 @@ function phoneView(d, big) {
   $('.ig', el).onclick = () => post(d.id, 'instagram');
   $('.auto', el).onclick = () => state.auto[d.id] ? stopAuto(d.id) : startAuto(d.id, +$('.sec', el).value);
   if (!big) { $('.open', el).onclick = () => openFocus(d.id); $('b', el).style.cursor = 'pointer'; $('b', el).onclick = () => openFocus(d.id); }
-  img.onerror = () => setTimeout(() => img.src = `/stream/${d.id}?${Date.now()}`, 5000);
+  img.onerror = () => { img.style.visibility = 'hidden'; setTimeout(() => img.src = `/stream/${d.id}?${Date.now()}`, 5000); };
+  img.onload = () => img.style.visibility = '';
   return el;
 }
 

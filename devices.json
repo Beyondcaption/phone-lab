@@ -4,35 +4,35 @@
   "devices": [
     {
       "id": 1,
-      "name": "Handy 1",
+      "name": "Phone 1",
       "udid": "00008110-001A5C613498401E",
       "wda_port": 8101,
       "mjpeg_port": 9101
     },
     {
       "id": 2,
-      "name": "Handy 2",
+      "name": "Phone 2",
       "udid": "00008110-000105503E6A201E",
       "wda_port": 8102,
       "mjpeg_port": 9102
     },
     {
       "id": 3,
-      "name": "Handy 3",
+      "name": "Phone 3",
       "udid": "00008110-00063D801E7B801E",
       "wda_port": 8103,
       "mjpeg_port": 9103
     },
     {
       "id": 4,
-      "name": "Handy 4",
+      "name": "Phone 4",
       "udid": "00008110-0018793422D8401E",
       "wda_port": 8104,
       "mjpeg_port": 9104
     },
     {
       "id": 5,
-      "name": "Handy 5",
+      "name": "Phone 5",
       "udid": "00008110-000971060268401E",
       "wda_port": 8105,
       "mjpeg_port": 9105
