@@ -28,6 +28,11 @@ if [[ ! -f "$DATA/users.json" ]]; then
 fi
 
 if [[ -n "$PHONELAB_NO_LAUNCHD" ]]; then echo "ready: $DATA, version $VER"; exit 0; fi
+# Fenster nur neu geöffnet, gleiche Version, beide Dienste antworten: nichts neu starten (sonst fliegen die VAs kurz raus)
+if [[ -n "$PHONELAB_FROM_WINDOW" && "$(cat "$DATA/.installed-version" 2>/dev/null)" == "$VER" ]] \
+   && curl -s -o /dev/null --max-time 2 http://127.0.0.1:3000/login && curl -s -o /dev/null --max-time 2 http://127.0.0.1:3001/; then
+  exit 0
+fi
 # Dienst: Autostart nach Login, Mac schläft nicht, Neustart bei Absturz
 PL=~/Library/LaunchAgents/com.phonelab.server.plist; mkdir -p ~/Library/LaunchAgents
 cat > "$PL" <<P
@@ -66,10 +71,15 @@ cat > "$WL" <<P
 P
 launchctl bootout "gui/$(id -u)/com.phonelab.warmup" >/dev/null 2>&1; sleep 1
 launchctl bootstrap "gui/$(id -u)" "$WL" >> "$DATA/logs/app.log" 2>&1
+echo "$VER" > "$DATA/.installed-version"
+# phone-lab Desk wird auf diesem Mac nicht mehr gebraucht (das Fenster ist jetzt in dieser App); VAs nutzen es weiter
 # Tailscale-Freigabe, falls Tailscale da ist und noch nichts freigegeben wurde
 TS=/Applications/Tailscale.app/Contents/MacOS/Tailscale
 if [[ -x "$TS" ]] && "$TS" serve status 2>&1 | grep -q "No serve config"; then ("$TS" serve --bg 3000 >> "$DATA/logs/app.log" 2>&1 &); fi
 for i in {1..40}; do curl -s -o /dev/null http://127.0.0.1:3000/ && break; sleep 1; done
-# Dashboard im eigenen Fenster, wenn phone-lab Desk installiert ist, sonst im Browser
-if [[ -d "/Applications/phone-lab Desk.app" ]]; then open -a "phone-lab Desk"; else open "http://127.0.0.1:3000"; fi
+# Das Fenster der App zeigt das Dashboard selbst (PHONELAB_FROM_WINDOW). Nur ohne Fenster-App (Rückfall von make-app.sh):
+# phone-lab Desk, sonst Browser
+if [[ -z "$PHONELAB_FROM_WINDOW" ]]; then
+  if [[ -d "/Applications/phone-lab Desk.app" ]]; then open -a "phone-lab Desk"; else open "http://127.0.0.1:3000"; fi
+fi
 osascript -e "display notification \"Version $VER is running. Phones connect over USB.\" with title \"phone-lab\"" >/dev/null 2>&1

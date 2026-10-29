@@ -53,8 +53,14 @@ unsignierte App: Systemeinstellungen > Datenschutz & Sicherheit > "Dennoch öffn
 Passwort (oder übernimmt Benutzer, Einstellungen und Logs aus einer älteren Installation unter ~/phone-lab oder ~/Desktop/phone-lab),
 richtet den Autostart ein, startet die Tailscale-Freigabe, wenn Tailscale installiert ist, und öffnet das Dashboard.
 
-Daten liegen unter ~/Library/Application Support/phone-lab (users.json, settings.json, logs, devimages, Pairing). Update: neue DMG,
-App im Programme-Ordner ersetzen, einmal doppelklicken. Die App läuft als Hintergrunddienst (kein Dock-Symbol), Doppelklick öffnet nur das Dashboard, im Fenster von phone-lab Desk, wenn die App installiert ist, sonst im Browser.
+Daten liegen unter ~/Library/Application Support/phone-lab (users.json, settings.json, .env, logs, devimages, Pairing). Update: neue DMG,
+App im Programme-Ordner ersetzen, einmal öffnen.
+
+Auf dem Mac mit den iPhones ist phone-lab EIN Programm: ein Fenster mit Dock-Symbol (app/window.swift), das beim Öffnen
+Server und Warmup-Dienst unter launchd einrichtet (nur bei neuer Version oder wenn einer nicht läuft) und das Dashboard zeigt.
+Fenster zu: die Dienste laufen weiter, die VAs merken nichts. Menü View: Reload (Cmd+R), Logs-Ordner öffnen (Cmd+Shift+L).
+phone-lab Desk braucht es dort nicht mehr, nur die VAs auf ihren eigenen Rechnern. Lässt sich die Fenster-App beim Bauen nicht
+kompilieren, baut make-app.sh die bisherige Variante (Hintergrunddienst, Dashboard im Browser) und sagt es.
 
 ## Aktualisieren von Hand
 

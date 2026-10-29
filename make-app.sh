@@ -16,7 +16,18 @@ APP="$B/phone-lab.app"; R="$APP/Contents/Resources/app"
 mkdir -p "$APP/Contents/MacOS" "$R/bin"
 cp VERSION server.js warmup.js index.html charts.js usbmux.js plist.js user.js devices.json README.md "$R/"
 cp bin/node bin/ios "$R/bin/"; cp -R wda "$R/wda"; cp -R devimages "$R/devimages"
-cp "$DIR/app/launcher.sh" "$APP/Contents/MacOS/phone-lab"; chmod +x "$APP/Contents/MacOS/phone-lab" "$R/bin/"*
+chmod +x "$R/bin/"*
+# Ein Programm: Fenster-App (app/window.swift) mit Dock-Symbol, die beim Start launcher.sh ausführt und das Dashboard zeigt.
+# Klappt das Kompilieren nicht, bleibt es beim bisherigen Weg (launcher.sh als Programm, Dashboard im Browser oder in phone-lab Desk).
+cp "$DIR/app/launcher.sh" "$APP/Contents/Resources/launcher.sh"
+if swiftc -O -target arm64-apple-macos14 -o "$B/window-arm64" "$DIR/app/window.swift" \
+   && swiftc -O -target x86_64-apple-macos14 -o "$B/window-x64" "$DIR/app/window.swift" \
+   && lipo -create "$B/window-arm64" "$B/window-x64" -output "$APP/Contents/MacOS/phone-lab"; then
+  WINDOW=1; echo "Fenster-App gebaut (Intel + Apple Silicon)"
+else
+  WINDOW=0; echo "HINWEIS: Fenster-App ließ sich nicht kompilieren, baue die bisherige Variante ohne Fenster"
+  cp "$DIR/app/launcher.sh" "$APP/Contents/MacOS/phone-lab"; chmod +x "$APP/Contents/MacOS/phone-lab"
+fi
 
 # Symbol
 if [[ ! -f "$DIR/app/phone-lab.icns" ]]; then
@@ -41,9 +52,14 @@ cat > "$APP/Contents/Info.plist" <<I
   <key>CFBundleIconFile</key><string>phone-lab</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
-  <key>LSUIElement</key><true/>
+  <key>LSUIElement</key><$([[ $WINDOW == 1 ]] && echo false || echo true)/>
+  <key>NSHighResolutionCapable</key><true/>
+  <key>NSAppTransportSecurity</key><dict><key>NSAllowsLocalNetworking</key><true/></dict>
 </dict></plist>
 I
+# Ad-hoc-Signatur der App selbst (nicht --deep: die WDA-App darin behält ihre Apple-Signatur). Apple Silicon startet
+# unsignierte Programme sonst nicht; Gatekeeper fragt beim ersten Öffnen trotzdem einmal ("Dennoch öffnen").
+codesign --force -s - "$APP" 2>/dev/null || echo "HINWEIS: ad-hoc-Signatur fehlgeschlagen"
 
 # DMG: App plus Verknüpfung auf Programme, zum Reinziehen
 D="$B/dmg"; mkdir -p "$D"; cp -R "$APP" "$D/"; ln -s /Applications "$D/Applications"
