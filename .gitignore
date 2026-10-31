@@ -13,5 +13,6 @@ selfIdentity.plist
 users.json
 settings.json
 .taste-skill/inspect*/
+warmup.json
 desktop/node_modules/
 desktop/dist/

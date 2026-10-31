@@ -48,6 +48,16 @@ const users = () => { try { return JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'
 const sessions = new Map();           // token -> { name, admin, devices, ip }
 const loginFails = new Map();         // name|ip -> { n, until }
 const LOCK_MS = 120000;               // Handy gilt als belegt, solange der letzte Befehl jünger als 2 min ist
+// Dienstzugang für Hintergrund-Dienste auf diesem Mac (z. B. warmup.js): Token in DATA/service.token, kein Admin.
+// Ein Dienst gibt jedem Menschen sofort ab und bekommt 409, solange ein Mensch das Handy hält.
+const SERVICE_TOKEN_FILE = path.join(DATA, 'service.token');
+if (!fs.existsSync(SERVICE_TOKEN_FILE)) fs.writeFileSync(SERVICE_TOKEN_FILE, crypto.randomBytes(24).toString('hex'), { mode: 0o600 });
+const SERVICE = { name: process.env.PHONELAB_SERVICE_NAME || 'claude', admin: false, devices: 'all', service: true, token: fs.readFileSync(SERVICE_TOKEN_FILE, 'utf8').trim() };
+function serviceUser(req) {
+  const m = /^Bearer (\S+)$/.exec(req.headers.authorization || ''); if (!m) return null;
+  const a = Buffer.from(m[1]), b = Buffer.from(SERVICE.token);
+  return a.length === b.length && crypto.timingSafeEqual(a, b) ? SERVICE : null;
+}
 function protokoll(user, ip, text) {
   fs.appendFileSync(path.join(DATA, 'logs', 'zugriff.log'), `${new Date().toISOString()} ${user || '-'} ${ip} ${text}\n`);
 }
@@ -265,7 +275,7 @@ function todayCounts() {
   const { sessions } = insights(), today = new Date(); today.setHours(0, 0, 0, 0);
   const by = {};
   for (const s of sessions) {
-    if (s.end < today.getTime()) continue;
+    if (s.end < today.getTime() || s.user === SERVICE.name) continue;
     const b = by[s.phone] = by[s.phone] || { likes: 0, comments: 0 };
     b.likes += s.counts.doubletap || 0; b.comments += (s.counts.text || 0) + (s.counts.enter || 0);
   }
@@ -449,7 +459,7 @@ const server = http.createServer(async (req, res) => {
   // Updates für phone-lab Desk, ohne Anmeldung (die App enthält keine Schlüssel). Nur mit GITHUB_TOKEN in .env, sonst 404.
   if (req.method === 'GET' && route === 'desktop') return desktopUpdate(res, idStr);
   // Nur im Testbetrieb ohne iPhones: PHONELAB_AUTOLOGIN=name meldet jede Anfrage ohne Cookie als diesen Admin an (für Screenshots)
-  const user = cookie(req) || (FAKE && process.env.PHONELAB_AUTOLOGIN ? { name: process.env.PHONELAB_AUTOLOGIN, admin: true, devices: 'all', ip } : null);
+  const user = cookie(req) || serviceUser(req) || (FAKE && process.env.PHONELAB_AUTOLOGIN ? { name: process.env.PHONELAB_AUTOLOGIN, admin: true, devices: 'all', ip } : null);
   if (route === 'logout') {
     if (user) { protokoll(user.name, ip, 'logout'); for (const [t, u] of sessions) if (u === user) sessions.delete(t); }
     res.writeHead(303, { 'Set-Cookie': 'pl=; Max-Age=0; Path=/', Location: '/' }); return res.end();
@@ -532,6 +542,9 @@ const server = http.createServer(async (req, res) => {
       lockedBy: d.lockedBy && Date.now() - d.lockAt < LOCK_MS && d.lockedBy !== user.name ? d.lockedBy : null,
       today: counts[d.name] || { likes: 0, comments: 0 } })) });
   }
+  // Durchreichung zu einem Zusatzdienst auf diesem Mac (warmup.js auf PHONELAB_AGENT_PORT). Der Server kennt dessen Inhalt
+  // nicht; er hängt nur an, wer angemeldet ist, und das Dienst-Token, damit der Dienst nur Anfragen über den Server annimmt.
+  if (route === 'agent' && !user.service) return agentProxy(req, res, user);
   const dev = CFG.devices.find(d => String(d.id) === idStr);
   if (!dev || !allowed(user, dev)) return json(res, 404, { error: 'unknown phone' });
   if (req.method === 'GET' && route === 'stream') return streamClient(dev, res);
@@ -557,10 +570,12 @@ const server = http.createServer(async (req, res) => {
     if (b.auto && dev.pending) return json(res, 200, { ok: true, skipped: true });
     // gesperrtes Handy: vor der ersten Eingabe aufwecken, sonst landet der Tipp im Leeren
     if (dev.locked && action !== 'unlock') await exec(dev, () => cmd.unlock(dev), 'unlock', 8000).catch(() => {});
-    // Sperre: belegt, solange ein anderer in den letzten 2 min einen Befehl geschickt hat
-    if (dev.lockedBy && dev.lockedBy !== user.name && Date.now() - dev.lockAt < LOCK_MS) return json(res, 409, { ok: false, error: `${dev.name} is in use by ${dev.lockedBy}` });
+    // Sperre: belegt, solange ein anderer in den letzten 2 min einen Befehl geschickt hat. Hält ein Dienst das Handy,
+    // übernimmt jeder Mensch sofort; ein Dienst bekommt 409, solange ein Mensch es hält.
+    const held = dev.lockedBy && dev.lockedBy !== user.name && Date.now() - dev.lockAt < LOCK_MS;
+    if (held && (user.service || !dev.lockService)) return json(res, 409, { ok: false, error: `${dev.name} is in use by ${dev.lockedBy}` });
     if (dev.lockedBy !== user.name) protokoll(user.name, ip, `takes over ${dev.name}`);
-    dev.lockedBy = user.name; dev.lockAt = Date.now();
+    dev.lockedBy = user.name; dev.lockService = !!user.service; dev.lockAt = Date.now();
     protokoll(user.name, ip, `${dev.name} ${action}${action === 'text' ? ' (' + String(b.text || '').length + ' chars)' : ''}${action === 'keys' && String(b.text || '').includes('\n') ? ' (enter)' : ''}`);
     try { await exec(dev, () => cmd[action](dev, b), `${action} by ${user.name}`, 8000); return json(res, 200, { ok: true }); }
     catch (e) { return json(res, 502, { ok: false, error: e.message }); }
@@ -568,6 +583,17 @@ const server = http.createServer(async (req, res) => {
   json(res, 404, { error: 'not found' });
 });
 
+const AGENT_PORT = +(process.env.PHONELAB_AGENT_PORT || 3001);
+function agentProxy(req, res, user) {
+  const p = http.request({ host: '127.0.0.1', port: AGENT_PORT, method: req.method, path: req.url.replace(/^\/agent/, '') || '/', timeout: 15000,
+    headers: { 'Content-Type': req.headers['content-type'] || 'application/json', 'X-Phonelab-Token': SERVICE.token,
+      'X-Phonelab-User': user.name, 'X-Phonelab-Admin': user.admin ? '1' : '0', 'X-Phonelab-Devices': JSON.stringify(user.devices) } }, up => {
+    res.writeHead(up.statusCode, { 'Content-Type': up.headers['content-type'] || 'application/json' }); up.pipe(res);
+  });
+  p.on('timeout', () => p.destroy(new Error('timeout')));
+  p.on('error', () => { if (!res.headersSent) json(res, 503, { error: 'service not running' }); });
+  req.pipe(p);
+}
 
 (async () => {
   if (!FAKE && !fs.existsSync(WDA_APP)) { console.error(`WDA-App fehlt: ${WDA_APP}. Auf einem Mac mit Xcode ./build-wda.sh ausführen.`); process.exit(1); }
