@@ -91,6 +91,14 @@ const swipe = { path: [{ x: 0.5, y: 0.8, t: 0 }, { x: 0.5, y: 0.2, t: 200 }] };
     while (Date.now() < until) { const { value, done } = await rd.read(); if (done) break; bytes += value.length; }
     ctl.abort();
     ok(bytes > 20000, 'Stream liefert Bilder', bytes);
+    // Einzelbilder nacheinander (/next): jedes Bild hat eine höhere Nummer als das vorige
+    const nx = async after => { const r = await fetch(`${B}/next/2?after=${after}`, { headers: { cookie: adminCookie } }); return { status: r.status, type: r.headers.get('content-type'), seq: +r.headers.get('x-frame'), len: (await r.arrayBuffer()).byteLength }; };
+    const n1 = await nx(0), n2 = await nx(n1.seq), n3 = await nx(n2.seq);
+    ok(n1.status === 200 && n1.type === 'image/jpeg' && n1.len > 1000, '/next liefert ein JPEG', n1);
+    ok(n2.seq > n1.seq && n3.seq > n2.seq, '/next wartet auf das jeweils nächste Bild', [n1.seq, n2.seq, n3.seq]);
+    const tn = Date.now(); for (let i = 0, s = n3.seq; i < 8; i++) s = (await nx(s)).seq;
+    const fps = 8000 / (Date.now() - tn);
+    ok(fps > 5, 'Bildrate über /next nahe an der von WDA (8/s)', Math.round(fps * 10) / 10);
     const ins = await admin.get('/insights');
     ok(ins.today.length > 0 && ins.devices.length === CFG.devices.length, 'Insights ok');
     const dev = await admin.get('/devices');

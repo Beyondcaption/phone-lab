@@ -108,8 +108,11 @@
   .screen .toast.show { display: block; }
   .screen .toast.err, .msg.err { color: var(--pill-negative-ink); }
   .screen .typing { position: absolute; left: 8px; top: 8px; background: #000; color: #fff; font-size: var(--fs-small); padding: 2px 8px; border-radius: 999px; display: none; }
-  .screen .paused { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; color: var(--faint); font-size: 13px; }
-  .screen.is-paused .paused { display: flex; }
+  .screen .paused { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); display: none; background: #000; color: #fff; font-size: var(--fs-small); line-height: 16px; padding: 5px 10px; border-radius: 12px; white-space: nowrap; pointer-events: none; }
+  .screen.is-paused .paused { display: block; }
+  .screen.is-paused img { opacity: .5; }
+  .t-head button.solo { height: 24px; padding: 0 8px; font-size: var(--fs-small); border-color: var(--control); color: var(--muted); }
+  .t-head button.solo.on { background: var(--accent); color: #000; border-color: var(--accent); }
   .screen .offline { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; text-align: center; padding: 20px; color: var(--muted); font-size: 13px; line-height: 18px; }
   .tile.offline .screen .offline { display: flex; }
   .screen .asleep { position: absolute; inset: 0; display: none; flex-direction: column; gap: 10px; align-items: center; justify-content: center; text-align: center; padding: 20px; color: var(--muted); font-size: 13px; line-height: 18px; background: rgba(0,0,0,.6); }
@@ -255,6 +258,7 @@
       <label style="color:var(--muted);font-size:13px">Seconds per reel <input type="number" id="allSec" min="3" max="60" value="8" style="width:56px;text-align:right;margin-left:6px"></label>
       <button id="autoAll" title="Start auto-scroll on every phone that is ready and free">Auto-scroll all</button>
       <button id="stopAll" class="quiet" title="Stop auto-scroll on every phone">Stop all</button>
+      <button id="streamAll" hidden title="Solo is on: only one phone streams. Stream every phone again." onclick="setSolo(null)">Stream all</button>
     </div>
     <div id="grid"></div>
   </section>
@@ -360,14 +364,45 @@ const icon = (id, s = 16) => `<svg width="${s}" height="${s}" aria-hidden="true"
 const round1 = v => Math.round(v * 10) / 10;
 const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 
-// ---------- streams: only tiles on screen stream; everything pauses behind the focus view or another view ----------
-function wantStream(el) { const id = +el.dataset.id; const inFocus = el.closest('#focus'); return state.view === 'phones' && (inFocus ? true : state.focusId == null && el._visible) || (inFocus && state.focusId === id); }
+// ---------- streams: only tiles on screen stream; everything pauses behind the focus view, another view, a hidden tab
+// or when one phone is set to solo. A paused tile keeps its last picture.
+function wantStream(el) {
+  if (document.hidden) return false;
+  const id = +el.dataset.id, inFocus = el.closest('#focus');
+  if (inFocus) return state.focusId === id;
+  return state.view === 'phones' && state.focusId == null && el._visible && (state.solo == null || state.solo === id);
+}
+// one picture at a time: the next is requested when the last has arrived, so a slow line lowers the frame rate
+// instead of building a delay (a continuous stream queued up in Tailscale and lagged seconds behind)
+async function pull(el, tok) {
+  const img = $('img', el); let seq = 0;
+  while (el._pull === tok) {
+    try {
+      const r = await fetch(`/next/${el.dataset.id}?after=${seq}`, { cache: 'no-store' });
+      if (r.status === 401) return location.href = '/login';
+      if (r.status === 204) continue;
+      if (!r.ok) throw new Error(r.status);
+      seq = +r.headers.get('X-Frame') || seq + 1;
+      const url = URL.createObjectURL(await r.blob()), pre = new Image();
+      pre.src = url; await pre.decode().catch(() => {});
+      if (el._pull !== tok) { URL.revokeObjectURL(url); return; }
+      const old = img.src; img.src = url; if (old.startsWith('blob:')) URL.revokeObjectURL(old);
+    } catch { if (el._pull === tok) await new Promise(r => setTimeout(r, 3000)); }
+  }
+}
 function syncStream(el) {
   const img = $('img', el), scr = $('.screen', el), on = wantStream(el);
-  if (on && !img._live) { img._live = true; img.src = `/stream/${el.dataset.id}?${Date.now()}`; scr.classList.remove('is-paused'); }
-  if (!on && img._live) { img._live = false; img.removeAttribute('src'); scr.classList.add('is-paused'); }
+  if (on && !el._pull) { const tok = el._pull = {}; pull(el, tok); }
+  if (!on && el._pull) el._pull = null;
+  scr.classList.toggle('is-paused', !on);
+  if (!on && !img.getAttribute('src') && el._visible && !document.hidden && state.view === 'phones') img.src = `/frame/${el.dataset.id}?${Date.now()}`;   // one still for a paused tile that never streamed
+  $$('.solo', el).forEach(b => { b.classList.toggle('on', state.solo === +el.dataset.id); b.setAttribute('aria-pressed', state.solo === +el.dataset.id); });
 }
-const syncAll = () => $$('.tile').forEach(syncStream);
+const syncAll = () => { $$('.tile').forEach(syncStream); $('#streamAll').hidden = state.solo == null; };
+document.addEventListener('visibilitychange', syncAll);
+// solo: only this phone streams in the grid, remembered per browser
+try { state.solo = localStorage.getItem('solo') ? +localStorage.getItem('solo') : null; } catch {}
+function setSolo(id) { state.solo = id; try { id == null ? localStorage.removeItem('solo') : localStorage.setItem('solo', id); } catch {} syncAll(); }
 const io = new IntersectionObserver(entries => entries.forEach(e => { e.target._visible = e.isIntersecting; syncStream(e.target); }), { rootMargin: '200px' });
 
 // ---------- one phone view (grid and focus) ----------
@@ -376,7 +411,7 @@ function phoneView(d, big) {
   el.className = 'tile'; el.dataset.id = d.id;
   const apps = state.settings.apps || ['Instagram'];
   el.innerHTML = `
-    <div class="t-head"><span class="dot"></span><span class="t-name">${esc(d.name)}</span><span class="t-handle"></span><span class="t-meta num"></span>${big ? '' : `<button class="icon open" title="Open large" aria-label="Open ${esc(d.name)} large">${icon('expand')}</button>`}</div>
+    <div class="t-head"><span class="dot"></span><span class="t-name">${esc(d.name)}</span><span class="t-handle"></span><span class="t-meta num"></span>${big ? '' : `<button class="solo" title="Stream only this phone. The others pause and keep their last picture. Click again to stream all." aria-pressed="false">Solo</button><button class="icon open" title="Open large" aria-label="Open ${esc(d.name)} large">${icon('expand')}</button>`}</div>
     <div class="screen"><img alt="Live screen of ${esc(d.name)}" draggable="false"><canvas></canvas><span class="typing">Typing to phone</span><span class="toast" role="status"></span>
       <div class="paused">Stream paused</div><div class="offline">Phone offline</div>
       <div class="asleep"><span>The screen is off (auto-lock).</span><button class="wake">Wake</button></div></div>
@@ -448,9 +483,7 @@ function phoneView(d, big) {
   $$('.app', el).forEach(b => b.onclick = () => post(d.id, 'launch', { app: b.dataset.app }));
   $('.shot', el).onclick = () => saveShot(d, img);
   $('.auto', el).onclick = () => state.auto[d.id] ? stopAuto(d.id) : startAuto(d.id, +$('.sec', el).value);
-  if (!big) { $('.open', el).onclick = () => openFocus(d.id); $('.t-name', el).onclick = () => openFocus(d.id); }
-  img.onerror = () => { if (!img._live) return; img.style.visibility = 'hidden'; setTimeout(() => { if (img._live) img.src = `/stream/${d.id}?${Date.now()}`; }, 5000); };
-  img.onload = () => img.style.visibility = '';
+  if (!big) { $('.open', el).onclick = () => openFocus(d.id); $('.t-name', el).onclick = () => openFocus(d.id); $('.solo', el).onclick = () => setSolo(state.solo === d.id ? null : d.id); }
   el.decorate = () => {
     $('.t-handle', el).textContent = state.settings.labels[d.id] || '';
     const n = state.settings.notes[d.id] || ''; $('.note', el).textContent = n; $('.note', el).hidden = !n;

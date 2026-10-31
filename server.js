@@ -295,20 +295,47 @@ function computeInsights() {
 
 // ---------- MJPEG-Verteiler: eine Verbindung je Handy, alle Zuschauer bekommen die Bilder daraus.
 // Ein Zuschauer, dessen Leitung nicht nachkommt, bekommt Bilder ausgelassen statt einen wachsenden Rückstand (sonst hinkt die Anzeige immer weiter nach).
+// Das Dashboard holt die Bilder einzeln über /next (immer erst das nächste, wenn das letzte da ist). Beim Dauerstrom stauten
+// sich die Bilder bei langsamer Leitung in Tailscale an, die Anzeige hing dann Sekunden hinterher. /stream bleibt für Werkzeuge.
 const streams = new Map();
-function streamClient(dev, res) {
+const PULL_IDLE = 5000;   // so lange nach dem letzten /next bleibt die Verbindung zu WDA offen
+const wanted = st => st.clients.size > 0 || Date.now() - st.pullAt < PULL_IDLE;
+function getStream(dev) {
   let st = streams.get(dev.id);
-  if (!st) { st = { clients: new Set(), buf: Buffer.alloc(0), req: null, frames: 0 }; streams.set(dev.id, st); connectUpstream(dev, st); }
+  if (!st) { st = { clients: new Set(), waiters: new Set(), req: null, frames: 0, pullAt: 0 }; streams.set(dev.id, st); connectUpstream(dev, st); }
+  return st;
+}
+function dropStream(dev, st) { if (wanted(st) || streams.get(dev.id) !== st) return; clearInterval(st.watch); if (st.req) st.req.destroy(); streams.delete(dev.id); }
+function streamClient(dev, res) {
+  const st = getStream(dev);
   res.writeHead(200, { 'Content-Type': 'multipart/x-mixed-replace; boundary=frame', 'Cache-Control': 'no-cache', Connection: 'close' });
   st.clients.add(res);
-  res.on('close', () => { st.clients.delete(res); if (!st.clients.size) { clearInterval(st.watch); if (st.req) st.req.destroy(); streams.delete(dev.id); } });
+  res.on('close', () => { st.clients.delete(res); dropStream(dev, st); });
+}
+// Das nächste Bild nach Nummer "after": sofort, wenn schon eins da ist, sonst warten bis 1,5 s (dann 204, der Browser fragt neu)
+function nextFrame(dev, after, res) {
+  const st = getStream(dev); st.pullAt = Date.now();
+  const send = () => { res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Content-Length': st.last.length, 'Cache-Control': 'no-store', 'X-Frame': String(st.frames) }); res.end(st.last); };
+  if (st.last && st.frames > after) return send();
+  const w = () => { clearTimeout(t); st.waiters.delete(w); send(); };
+  const t = setTimeout(() => { st.waiters.delete(w); res.writeHead(204, { 'Cache-Control': 'no-store' }); res.end(); }, 1500);
+  st.waiters.add(w);
+  res.on('close', () => { clearTimeout(t); st.waiters.delete(w); });
 }
 function connectUpstream(dev, st) {
   let retried = false;
-  const retry = () => { if (retried) return; retried = true; clearInterval(st.watch); st.req = null; if (streams.get(dev.id) === st && st.clients.size) setTimeout(() => connectUpstream(dev, st), 2000); };
-  // Wächter: kommt 10 s lang kein Bild, obwohl jemand zuschaut, hängt der Strom (WDA schließt ihn dabei nicht): neu verbinden
+  const retry = () => {
+    if (retried) return; retried = true; clearInterval(st.watch); st.req = null;
+    if (streams.get(dev.id) !== st) return;
+    if (wanted(st)) setTimeout(() => connectUpstream(dev, st), 2000); else streams.delete(dev.id);
+  };
+  // Wächter: kommt 10 s lang kein Bild, obwohl jemand zuschaut, hängt der Strom (WDA schließt ihn dabei nicht): neu verbinden.
+  // Schaut keiner mehr zu (kein /stream offen, kein /next seit 5 s), wird die Verbindung zu WDA geschlossen.
   st.lastAt = Date.now(); clearInterval(st.watch);
-  st.watch = setInterval(() => { if (st.clients.size && Date.now() - st.lastAt > 10000) { console.log(`[${dev.name}] Bildstrom hängt, verbinde neu`); req.destroy(); retry(); } }, 5000);
+  st.watch = setInterval(() => {
+    if (!wanted(st)) return dropStream(dev, st);
+    if (Date.now() - st.lastAt > 10000) { console.log(`[${dev.name}] Bildstrom hängt, verbinde neu`); req.destroy(); retry(); }
+  }, 2500);
   const req = http.request({ host: '127.0.0.1', port: dev.mjpeg_port, path: '/', method: 'GET' }, up => {
     // Stücke sammeln und erst zusammenfügen, wenn das Bild vollständig ist (statt bei jedem Stück neu zu kopieren)
     let parts = [], have = 0, need = 0;
@@ -335,6 +362,7 @@ function broadcast(dev, st, frame) {
   // einmal bauen, an alle schicken; wer nicht nachkommt, bekommt dieses Bild nicht
   const out = Buffer.concat([Buffer.from(`--frame\r\nContent-Type: image/jpeg\r\nContent-Length: ${frame.length}\r\n\r\n`), frame, CRLF]);
   for (const res of st.clients) { if (!res.writableNeedDrain) res.write(out); }
+  for (const w of [...st.waiters]) w();
 }
 // Ein aktuelles JPEG für die Bewertung durch Claude: aus dem laufenden Stream, sonst eine kurze eigene Verbindung
 function grabFrame(dev) {
@@ -507,6 +535,7 @@ const server = http.createServer(async (req, res) => {
   const dev = CFG.devices.find(d => String(d.id) === idStr);
   if (!dev || !allowed(user, dev)) return json(res, 404, { error: 'unknown phone' });
   if (req.method === 'GET' && route === 'stream') return streamClient(dev, res);
+  if (req.method === 'GET' && route === 'next') return nextFrame(dev, +new URLSearchParams(req.url.split('?')[1] || '').get('after') || 0, res);
   // ein einzelnes aktuelles Bild des Bildschirms (JPEG)
   if (req.method === 'GET' && route === 'frame') {
     try { const f = await grabFrame(dev); res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Content-Length': f.length, 'Cache-Control': 'no-store' }); return res.end(f); }

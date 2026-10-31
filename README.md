@@ -136,7 +136,8 @@ FileVault an, Firewall an (geprüft am 28.10.2026). Automatische Anmeldung nur, 
 - Raster aller Handys, Klick auf den Namen öffnet den Focus (groß, Tastenkürzel, Snippets, direktes Tippen mit T).
 - Klick = tippen, Shift+Klick = Doppeltipp (Like), Rechtsklick halten = langer Druck, Ziehen = wischen mit Leuchtspur, Back = Wisch vom linken Rand.
 - Auto-scroll je Handy oder für alle (Start/Stop in der Leiste), stoppt bei jedem Klick ins Bild, nach 20 min und beim Tab-Wechsel.
-- Stream-Stufe Light/Normal/Smooth je Browser, das Handy im Focus läuft immer flüssig.
+- Stream-Stufe Light/Normal/Smooth je Browser, das Handy im Focus läuft immer flüssig. Das Dashboard holt die Bilder einzeln (/next, das nächste erst, wenn das letzte da ist): bei langsamer Leitung sinkt die Bildrate statt dass sich Verzögerung aufbaut.
+- Solo-Knopf je Kachel: nur dieses Handy streamt, die anderen pausieren mit dem letzten Bild ("Stream all" hebt es auf, gemerkt je Browser). Im Hintergrund-Tab pausieren alle.
 - Admin: Users (Benutzer, Handys, Tagesziele), Snippets & notes (Textbausteine global und je Handy, Beschriftung, Notiz), Insights (Zeit je Benutzer und Handy, 30-Tage-Verlauf, CSV-Export, Ereignisse), Reboot je Handy im Focus.
 - Jeder sieht in der Leiste seine Tageswerte und Ziele. Apps in devices.json unter "apps" (Name: Bundle-ID).
 - settings.json (Snippets, Notizen, Ziele) und users.json bleiben beim App-Update erhalten.
