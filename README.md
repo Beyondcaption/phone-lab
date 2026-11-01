@@ -47,6 +47,10 @@ Der Betriebs-Mac braucht kein Internet, außer wenn ein iPhone eine iOS-Version 
 Entwicklungs-Mac: `./make-app.sh` baut phone-lab-<version>.dmg auf dem Schreibtisch, `./make-app.sh --release "Notiz"` lädt es
 zusätzlich als Release nach https://github.com/Beyondcaption/phone-lab/releases hoch. Version steht in VERSION und zählt automatisch hoch.
 
+Ohne Mac: VERSION setzen, committen und einen Tag `v<VERSION>` pushen (z. B. `git tag v2026.11.01-1 && git push origin main v2026.11.01-1`).
+GitHub Actions (.github/workflows/app.yml) baut dann auf einem macOS-Rechner und lädt das Release hoch. WDA, node, go-ios und
+devimages übernimmt der Lauf aus der letzten Release-DMG; ändern die sich, einmal auf dem Mac `./make-app.sh --release`.
+
 Betriebs-Mac: DMG öffnen, phone-lab in den Programme-Ordner ziehen, dort doppelklicken. Beim ersten Mal blockt macOS die
 unsignierte App: Systemeinstellungen > Datenschutz & Sicherheit > "Dennoch öffnen", oder im Terminal
 `xattr -dr com.apple.quarantine /Applications/phone-lab.app`. Die App fragt beim ersten Start nach einem Admin-Namen und

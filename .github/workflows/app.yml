@@ -1,0 +1,40 @@
+name: Build phone-lab App
+
+# Tag vYYYY.MM.DD-N bauen und als Release hochladen, ohne Entwicklungs-Mac.
+# wda/ (mit Apple-Signatur), bin/node, bin/ios und devimages/ liegen nicht im Repo: sie kommen aus der letzten
+# Release-DMG, nur der Code wird ausgetauscht. Ändert sich WDA oder go-ios, einmal auf dem Mac ./make-app.sh --release.
+on:
+  push:
+    tags:
+      - 'v20*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Teile aus der letzten Release-DMG holen
+        run: |
+          PREV=$(gh api "repos/${{ github.repository }}/releases?per_page=30" \
+            --jq '[.[] | select(.draft | not) | select(.tag_name | test("^v[0-9]{4}\\.")) | select(.tag_name != "${{ github.ref_name }}")][0].tag_name')
+          echo "Vorlage: $PREV"
+          gh release download "$PREV" --pattern '*.dmg' --dir /tmp/prev
+          MNT=$(mktemp -d)
+          hdiutil attach /tmp/prev/*.dmg -nobrowse -readonly -mountpoint "$MNT"
+          SRC="$MNT/phone-lab.app/Contents/Resources/app"
+          cp -R "$SRC/wda" "$SRC/devimages" .
+          mkdir -p bin && cp "$SRC/bin/node" "$SRC/bin/ios" bin/ && chmod +x bin/*
+          hdiutil detach "$MNT"
+
+      - name: App und DMG bauen, Release hochladen
+        env:
+          NOTES: ${{ github.event.head_commit.message }}
+        run: |
+          VER="${GITHUB_REF_NAME#v}"
+          PHONELAB_VERSION="$VER" zsh ./make-app.sh --release "${NOTES:-Update $VER}"

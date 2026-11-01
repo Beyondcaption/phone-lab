@@ -9,7 +9,8 @@ DIR=$(cd "$(dirname "$0")" && pwd); cd "$DIR"
 
 TODAY=$(date +%Y.%m.%d); OLD=$(cat VERSION 2>/dev/null || echo "")
 if [[ "$OLD" == "$TODAY-"* ]]; then N=$(( ${OLD##*-} + 1 )); else N=1; fi
-echo "$TODAY-$N" > VERSION; VER=$(cat VERSION); echo "Version $VER"
+# GitHub Actions gibt die Version aus dem Tag vor (PHONELAB_VERSION), sonst zählt sie hoch
+echo "${PHONELAB_VERSION:-$TODAY-$N}" > VERSION; VER=$(cat VERSION); echo "Version $VER"
 
 B=/tmp/phone-lab-app-build; rm -rf "$B"; mkdir -p "$B"
 APP="$B/phone-lab.app"; R="$APP/Contents/Resources/app"
@@ -63,7 +64,7 @@ codesign --force -s - "$APP" 2>/dev/null || echo "HINWEIS: ad-hoc-Signatur fehlg
 
 # DMG: App plus Verknüpfung auf Programme, zum Reinziehen
 D="$B/dmg"; mkdir -p "$D"; cp -R "$APP" "$D/"; ln -s /Applications "$D/Applications"
-OUT=~/Desktop/phone-lab-$VER.dmg; rm -f "$OUT"
+mkdir -p ~/Desktop; OUT=~/Desktop/phone-lab-$VER.dmg; rm -f "$OUT"
 hdiutil create -volname "phone-lab $VER" -srcfolder "$D" -ov -format UDZO "$OUT" >/dev/null
 echo "DMG: $OUT ($(du -h "$OUT" | cut -f1))"
 
