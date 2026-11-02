@@ -27,9 +27,9 @@ const BUNDLE = CFG.wda_bundle_id + '.xctrunner';
 // light ~2 Mbit/s je Handy, normal ~4, smooth ~9, focus ~12 (nur das eine Handy, das groß offen ist).
 const QUALITY = {
   light:  { mjpegServerFramerate: 6,  mjpegScalingFactor: 30, mjpegServerScreenshotQuality: 25 },
-  normal: { mjpegServerFramerate: 8,  mjpegScalingFactor: 35, mjpegServerScreenshotQuality: 25 },
-  smooth: { mjpegServerFramerate: 12, mjpegScalingFactor: 45, mjpegServerScreenshotQuality: 25 },
-  focus:  { mjpegServerFramerate: 15, mjpegScalingFactor: 50, mjpegServerScreenshotQuality: 25 },
+  normal: { mjpegServerFramerate: 8,  mjpegScalingFactor: 35, mjpegServerScreenshotQuality: 40 },
+  smooth: { mjpegServerFramerate: 12, mjpegScalingFactor: 45, mjpegServerScreenshotQuality: 50 },
+  focus:  { mjpegServerFramerate: 15, mjpegScalingFactor: 60, mjpegServerScreenshotQuality: 60 },
 };
 const SETTINGS = { ...QUALITY.normal, waitForIdleTimeout: 0, animationCoolOffTimeout: 0 };
 
