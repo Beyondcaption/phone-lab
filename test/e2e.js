@@ -23,7 +23,7 @@ fs.writeFileSync(path.join(DATA, 'users.json'), JSON.stringify({ users: [mkUser(
 const procs = {};
 const start = (key, file, env) => { const p = spawn(process.execPath, [path.join(ROOT, file)], { env: { ...process.env, ...env }, stdio: ['ignore', 'pipe', 'pipe'] }); p.out = ''; p.stdout.on('data', d => p.out += d); p.stderr.on('data', d => p.out += d); procs[key] = p; return p; };
 start('fake', 'test/fake-wda.js', { FAKE_SLOW: '5' });
-start('server', 'server.js', { PHONELAB_FAKE: '1', PHONELAB_DATA: DATA });
+start('server', 'server.js', { PHONELAB_FAKE: '1', PHONELAB_DATA: DATA, PHONELAB_HEALTH_MS: '2000' });
 start('agent', 'warmup.js', { PHONELAB_DATA: DATA, WARMUP_FAKE_JUDGE: '3', ANTHROPIC_API_KEY: '' });
 
 let failed = 0;
@@ -138,6 +138,24 @@ const swipe = { path: [{ x: 0.5, y: 0.8, t: 0 }, { x: 0.5, y: 0.2, t: 200 }] };
     ok(fps > 5, 'Bildrate über /next nahe an der von WDA (8/s)', Math.round(fps * 10) / 10);
     const ins = await admin.get('/insights');
     ok(ins.today.length > 0 && ins.devices.length === CFG.devices.length, 'Insights ok');
+
+    // 8b Ausfälle auf Handy 1 (Health-Check hier alle 2 s statt 10 s)
+    const fk = p => fetch(`http://127.0.0.1:${CFG.devices.find(d => d.id === 1).wda_port}${p}`);
+    const pull1 = async ms => { const end = Date.now() + ms; let s = 0, readyAll = true; while (Date.now() < end) { const r = await fetch(`${B}/next/1?after=${s}`, { headers: { cookie: adminCookie } }); s = +r.headers.get('x-frame') || s; await r.arrayBuffer(); if (!(await phone(admin, 1)).ready) readyAll = false; } return readyAll; };
+    await fk('/fake/hang?ms=12000');
+    ok(await pull1(13000), 'Status hängt, Bilder laufen: bleibt bereit');
+    await fk('/fake/frames?on=0'); await fk('/fake/hang?ms=60000');
+    let down = false; for (let i = 0; i < 40 && !down; i++) { await sleep(1000); down = !(await phone(admin, 1)).ready; }
+    const ev1 = () => admin.get('/diag').then(j => j.devices.find(d => d.id === 1).events.map(e => e.what));
+    ok(down && (await ev1()).some(w => /^offline: /.test(w)), 'wirklich weg: offline mit Grund', await ev1());
+    await fk('/fake/frames?on=1'); await fk('/fake/hang?ms=0');
+    let back = false; for (let i = 0; i < 20 && !back; i++) { await sleep(1000); back = (await phone(admin, 1)).ready; }
+    ok(back && (await ev1()).some(w => /^wieder bereit nach/.test(w)), 'kommt zurück, Rückkehr steht in /diag', await ev1());
+    const sess0 = (await stats(1)).sessions; await fk('/fake/drop');
+    const dropTap = await admin.post('/cmd/1/tap', { x: 0.5, y: 0.5 });
+    ok(dropTap.ok && (await stats(1)).sessions === sess0, 'abgerissene Verbindung: Tipp ok ohne neue Sitzung', { tap: dropTap, sessions: [sess0, (await stats(1)).sessions] });
+    ok((await admin.get('/diag')).devices.length === CFG.devices.length && (await va.get('/diag')).status === 403, '/diag nur für Admins');
+    ok(/^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d /m.test(procs.server.out), 'Server-Log mit Zeitstempel');
 
     // 9 Dienst aus: Fernsteuerung läuft weiter, /agent antwortet 503
     procs.agent.kill(); await sleep(800);

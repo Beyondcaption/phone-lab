@@ -160,6 +160,10 @@ FileVault an, Firewall an (geprüft am 28.10.2026). Automatische Anmeldung nur, 
 - Auf jedem iPhone Einstellungen > Anzeige & Helligkeit > Automatische Sperre: Nie (die Handys hängen am Strom). Sperrt sich
   ein Handy trotzdem, zeigt die Kachel "The screen is off" mit Wake, und die nächste Eingabe weckt es zuerst (geht nur ohne Code-Sperre).
 - Hängt der Bildstrom 10 s ohne Bild, verbindet der Server ihn selbst neu (server.log: "Bildstrom hängt").
+- "Phone offline" erst nach zwei verpassten Checks in Folge und nie, solange noch Bilder kommen (dann ist das iPhone nur
+  ausgelastet). Eine abgerissene Verbindung zu WDA ("socket hang up") versucht der Server einmal neu, ohne neue Sitzung.
+- Admins: `<Dashboard-Adresse>/diag` zeigt je Handy die letzten 50 Ausfälle mit Grund und Uhrzeit (USB weg, Port abgewiesen,
+  WDA beendet, Status-Timeout) und Zähler. Dieselben Zeilen stehen mit Zeitstempel in server.log.
 - Beenden in der Mac-App (Cmd+Q, Dock oder Knopf "Quit and stop server" unten in der Seitenleiste): "Quit and stop server"
   stoppt auch den Server (Handys für alle offline, der Mac darf wieder schlafen), "Keep server running" schließt nur die App.
   Wieder öffnen startet den Server neu. Nach einem Neustart des Macs startet der Server beim Anmelden von selbst.

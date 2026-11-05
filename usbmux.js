@@ -47,13 +47,14 @@ async function connect(udid, port) {
   return sock; // ab hier roher TCP-Strom zum iPhone
 }
 
-function forward(udid, devicePort, localPort) {
+// onError(e) erfährt, warum eine Verbindung nicht zustande kam (Gerät nicht per USB da, Port abgewiesen = WDA läuft nicht).
+function forward(udid, devicePort, localPort, onError) {
   const server = net.createServer(async client => {
     try {
       const dev = await connect(udid, devicePort);
       client.pipe(dev).pipe(client);
       dev.on('error', () => client.destroy()); client.on('error', () => dev.destroy());
-    } catch { client.destroy(); }
+    } catch (e) { if (onError) onError(e); client.destroy(); }
   });
   server.listen(localPort, '127.0.0.1');
   return server;

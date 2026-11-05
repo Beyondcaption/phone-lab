@@ -22,9 +22,15 @@ for (const dev of CFG.devices) {
     let body = ''; for await (const c of req) body += c;
     const b = body ? JSON.parse(body) : {};
     const u = req.url;
-    if (u === '/fake/stats') return send({ calls: s.calls, maxParallel: s.maxParallel, actions: s.actions.slice(-50), app: s.app, locked: !!s.locked, unlocks: s.unlocks || 0 });
-    if (u === '/status') return send({ ready: true });
-    if (u === '/session' && req.method === 'POST') return send({ sessionId: 's1' });
+    if (u === '/fake/stats') return send({ calls: s.calls, maxParallel: s.maxParallel, actions: s.actions.slice(-50), app: s.app, locked: !!s.locked, unlocks: s.unlocks || 0, sessions: s.sessions || 0 });
+    // Tests für Ausfälle: /fake/hang?ms=N lässt /status N ms hängen, /fake/frames?on=0 stoppt die Bilder,
+    // /fake/drop reißt die nächste Eingabe ohne Antwort ab (wie usbmux, wenn WDA kurz nicht annimmt)
+    if (u.startsWith('/fake/hang')) { s.hangUntil = Date.now() + +new URL(u, 'http://x').searchParams.get('ms'); return send(true); }
+    if (u.startsWith('/fake/frames')) { s.noFrames = new URL(u, 'http://x').searchParams.get('on') === '0'; return send(true); }
+    if (u === '/fake/drop') { s.drop = true; return send(true); }
+    if (u === '/status') { if (Date.now() < (s.hangUntil || 0)) await sleep(s.hangUntil - Date.now()); return send({ ready: true }); }
+    if (u === '/session' && req.method === 'POST') { s.sessions = (s.sessions || 0) + 1; return send({ sessionId: 's1' }); }
+    if (s.drop && u.endsWith('/actions')) { s.drop = false; return req.socket.destroy(); }
     if (u.endsWith('/window/size')) return send({ width: 375, height: 667 });
     if (u.endsWith('/appium/settings')) return send({});
     if (u.endsWith('/wda/batteryInfo')) return send({ level: 0.5 + dev.id / 20, state: 2 });
@@ -51,6 +57,7 @@ for (const dev of CFG.devices) {
     res.writeHead(200, { 'Content-Type': 'multipart/x-mixed-replace; boundary=--BoundaryString' });
     let i = 0;
     const t = setInterval(() => {
+      if (s.noFrames) return;
       const f = frames[Math.floor(i++ / 16) % frames.length];
       res.write(`--BoundaryString\r\nContent-type: image/jpg\r\nContent-Length: ${f.length}\r\n\r\n`); res.write(f); res.write('\r\n\r\n');
     }, 125);
