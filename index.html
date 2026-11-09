@@ -117,7 +117,12 @@
   .screen.is-paused img { opacity: .5; }
   .t-head button.solo { height: 24px; padding: 0 8px; font-size: var(--fs-small); border-color: var(--control); color: var(--muted); }
   .t-head button.solo.on { background: var(--accent); color: #000; border-color: var(--accent); }
-  .screen .offline { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; text-align: center; padding: 20px; color: var(--muted); font-size: 13px; line-height: 18px; }
+  .screen .offline { position: absolute; inset: 0; display: none; flex-direction: column; gap: 10px; align-items: center; justify-content: center; text-align: center; padding: 20px; color: var(--muted); font-size: 13px; line-height: 18px; z-index: 2; cursor: default; }
+  .screen .offline .otext { color: var(--text, #fff); }
+  .screen .offline .ometa { font-size: 12px; }
+  .screen .offline .restart { height: 30px; padding: 0 14px; }
+  #focusHealth .events { margin-top: 8px; font-size: 12px; line-height: 18px; color: var(--muted); }
+  #focusHealth .events .stamp { margin-right: 6px; }
   .tile.offline .screen .offline { display: flex; }
   .screen .asleep { position: absolute; inset: 0; display: none; flex-direction: column; gap: 10px; align-items: center; justify-content: center; text-align: center; padding: 20px; color: var(--muted); font-size: 13px; line-height: 18px; background: rgba(0,0,0,.6); }
   .screen .asleep button { background: var(--text); color: #000; border-color: var(--text); }
@@ -481,7 +486,7 @@ function phoneView(d, big) {
   el.innerHTML = `
     <div class="t-head"><span class="dot"></span><span class="t-name">${esc(d.name)}</span><span class="t-handle"></span><span class="t-meta num"></span>${big ? '' : `<button class="solo" title="Stream only this phone. The others pause and keep their last picture. Click again to stream all." aria-pressed="false">Solo</button><button class="icon open" title="Open large" aria-label="Open ${esc(d.name)} large">${icon('expand')}</button>`}</div>
     <div class="screen"><img alt="Live screen of ${esc(d.name)}" draggable="false"><canvas></canvas><span class="typing">Typing to phone</span><span class="toast" role="status"></span>
-      <div class="paused">Stream paused</div><div class="offline">Phone offline</div>
+      <div class="paused">Stream paused</div><div class="offline"><span class="otext">Phone offline</span><span class="ometa"></span><button class="restart" title="Restart WDA on this phone (not the phone itself)">Restart WDA</button></div>
       <div class="asleep"><span>The screen is off (auto-lock).</span><button class="wake">Wake</button></div></div>
       <div class="claude"><span class="pulse"></span><span class="ctext">Claude is scrolling</span><button class="cstop">Take over</button></div></div>
     <div class="alert" hidden><span></span>${state.admin ? '<button class="clear">Clear</button>' : ''}</div>
@@ -549,6 +554,8 @@ function phoneView(d, big) {
   $('.home', el).onclick = () => post(d.id, 'home');
   $('.wake', el).onclick = e => { e.stopPropagation(); post(d.id, 'unlock').then(j => j && j.ok ? note(d.id, 'Awake') : note(d.id, 'Error: could not wake. If the phone has a passcode, set Auto-Lock to Never.')); };
   $('.asleep', el).addEventListener('pointerdown', e => e.stopPropagation());
+  $('.offline', el).addEventListener('pointerdown', e => e.stopPropagation());
+  $('.restart', el).onclick = e => { e.stopPropagation(); restartWda(d.id); };
   $('.back', el).onclick = () => { el.showTrail(backSwipe()); post(d.id, 'swipe', { path: backSwipe() }); };
   $$('.app', el).forEach(b => b.onclick = () => post(d.id, 'launch', { app: b.dataset.app }));
   $('.shot', el).onclick = () => saveShot(d, img);
@@ -857,17 +864,31 @@ function health(d) {
   if (d.ios) parts.push('iOS ' + d.ios);
   if (d.battery != null) parts.push(`battery ${d.battery}%`);
   if (d.ready && d.uptimeMin != null) parts.push(`up ${d.uptimeMin} min`);
-  if (!d.ready && d.offlineMin != null) parts.push(`<span class="warn">offline for ${d.offlineMin} min</span>`);
+  if (!d.ready && d.offlineMin != null) parts.push(`<span class="warn">${esc(d.phase || 'offline')} for ${d.offlineMin} min</span>`);
+  if (d.restarts) parts.push(`${d.restarts} WDA ${d.restarts === 1 ? 'restart' : 'restarts'}${d.restartAt ? ', last ' + esc(d.restartAt) : ''}`);
   return parts.join(' · ');
 }
+// what the tile says while a phone is not ready: what is happening right now, and why
+const PHASE_TEXT = {
+  starting: 'Starting WDA on the phone. This takes up to a minute.',
+  restarting: 'Restarting WDA. Back in about a minute.',
+  rebooting: 'The phone is rebooting. Back in one to two minutes.',
+  preparing: 'Preparing the phone (developer image, WDA install).',
+  'not responding': 'WDA is not responding. phone-lab restarts it automatically.',
+};
+const phaseText = d => PHASE_TEXT[d.phase] || (d.reason ? `Phone offline: ${d.reason}` : 'Phone offline. Check the USB cable.');
+function restartWda(id) { post(id, 'restart').then(j => { if (j && j.ok) { note(id, 'Restarting WDA'); refresh(); } }); }
 function refreshStatus() {
   for (const d of statusCache) $$(`[data-id="${d.id}"].tile`).forEach(el => {
     const w = d.warmup || {}, claude = !!w.claude;
     el.classList.toggle('locked', heldByPerson(d)); el.classList.toggle('offline', !d.ready); el.classList.toggle('claude-on', claude);
     el.classList.toggle('asleep', !!d.locked);
-    const dot = $('.dot', el); dot.classList.toggle('on', d.ready); dot.classList.toggle('starting', !d.ready && d.running);
-    $('.t-meta', el).textContent = d.ready ? (d.battery != null ? `${d.battery}%` : '') : d.running ? 'starting' : `offline${d.offlineMin >= 1 ? ' ' + d.offlineMin + ' min' : ''}`;
-    $('.offline', el).textContent = d.running ? 'Phone is starting. This takes a minute after plugging in.' : 'Phone offline. Check the USB cable.';
+    const busy = ['starting', 'restarting', 'rebooting', 'preparing'].includes(d.phase);
+    const dot = $('.dot', el); dot.classList.toggle('on', d.ready); dot.classList.toggle('starting', !d.ready && busy);
+    $('.t-meta', el).textContent = d.ready ? (d.battery != null ? `${d.battery}%` : '') : `${d.phase || 'offline'}${d.offlineMin >= 1 ? ' ' + d.offlineMin + ' min' : ''}`;
+    $('.otext', el).textContent = phaseText(d);
+    $('.ometa', el).textContent = [d.offlineMin >= 1 ? `Not ready for ${d.offlineMin} min` : '', d.restarts ? `${d.restarts} WDA ${d.restarts === 1 ? 'restart' : 'restarts'}${d.restartAt ? ', last ' + d.restartAt : ''}` : ''].filter(Boolean).join(' · ');
+    $('.restart', el).hidden = d.phase === 'restarting' || d.phase === 'rebooting';
     const al = $('.alert', el); al.hidden = !w.alert; if (w.alert) $('span', al).textContent = `Stopped: ${w.alert.reason}. ${state.admin ? 'Check the phone, then clear.' : 'Tell an admin.'}`;
     if (claude) { const m = Math.max(1, Math.round((Date.now() - w.claude.since) / 60000)); $('.ctext', el).textContent = `Claude scrolls · ${m}/${w.claude.minutes} min`; $('.ctext', el).title = `Claude is scrolling, minute ${m} of ${w.claude.minutes}, ${w.claude.reels} reels`; }
     renderWarmup(el, d);
@@ -875,7 +896,13 @@ function refreshStatus() {
     if (heldByPerson(d)) m.innerHTML = `<span class="lock">In use by ${esc(d.lockedBy)}</span>`;
     else if (m.querySelector('.lock')) m.textContent = '';
   });
-  if (state.focusId != null) { const d = statusCache.find(x => x.id === state.focusId); if (d) $('#focusHealth').innerHTML = health(d) + (state.admin ? ` · <button class="danger" style="height:26px" onclick="rebootPhone(${d.id})">Reboot phone</button>` : ''); }
+  if (state.focusId != null) {
+    const d = statusCache.find(x => x.id === state.focusId);
+    // admins see the last events of this phone (outage reasons, restarts, USB), newest first
+    const ev = state.admin && d && d.events && d.events.length ? `<div class="events">${d.events.map(e => `<div><span class="stamp num">${esc(e.t.slice(11, 16))}</span> ${esc(e.what)}</div>`).join('')}</div>` : '';
+    if (d) $('#focusHealth').innerHTML = health(d) + ` · <button style="height:26px" onclick="if (confirm('Restart WDA on this phone? The live picture is gone for about a minute.')) restartWda(${d.id})">Restart WDA</button>`
+      + (state.admin ? ` <button class="danger" style="height:26px" onclick="rebootPhone(${d.id})">Reboot phone</button>` : '') + ev;
+  }
   // the finding: what needs a person first
   const ready = statusCache.filter(d => d.ready).length, alerts = statusCache.filter(d => d.warmup && d.warmup.alert), claude = statusCache.filter(d => d.warmup && d.warmup.claude);
   const due = statusCache.filter(d => d.warmup && d.warmup.today && !d.warmup.paused && !d.warmup.alert && ((d.warmup.done.likes || 0) < d.warmup.today.likes || (d.warmup.done.comments || 0) < d.warmup.today.comments));

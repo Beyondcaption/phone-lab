@@ -44,6 +44,7 @@ cat > "$PL" <<P
   <key>WorkingDirectory</key><string>$DATA</string>
   <key>EnvironmentVariables</key><dict><key>PHONELAB_DATA</key><string>$DATA</string><key>HOME</key><string>$HOME</string><key>PATH</key><string>/usr/bin:/bin</string></dict>
   <key>RunAtLoad</key><true/><key>KeepAlive</key><true/>
+  <key>ProcessType</key><string>Interactive</string>
   <key>StandardOutPath</key><string>$DATA/logs/server.log</string><key>StandardErrorPath</key><string>$DATA/logs/server.log</string>
 </dict></plist>
 P

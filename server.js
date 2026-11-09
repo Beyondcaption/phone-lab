@@ -202,11 +202,13 @@ const cmd = {
 const HTTP_CMDS = new Set(['tap', 'doubletap', 'swipe', 'text', 'keys', 'press', 'launch', 'home', 'instagram', 'unlock']);
 
 // ---------- go-ios ----------
-function ios(args, log) {
+// timeout (ms): hängt go-ios länger, wird es beendet und der Aufruf schlägt fehl (sonst wartet der Start ewig)
+function ios(args, log, timeout = 0) {
   return new Promise((resolve, reject) => {
     const p = spawn(IOS, args, { cwd: DATA, stdio: ['ignore', log, log] });
-    p.on('exit', code => code === 0 ? resolve() : reject(new Error(`ios ${args[0]} beendet mit ${code}`)));
-    p.on('error', reject);
+    const t = timeout && setTimeout(() => { try { p.kill('SIGKILL'); } catch {} reject(new Error(`ios ${args[0]} hängt seit ${timeout / 1000} s`)); }, timeout);
+    p.on('exit', code => { clearTimeout(t); code === 0 ? resolve() : reject(new Error(`ios ${args[0]} beendet mit ${code}`)); });
+    p.on('error', e => { clearTimeout(t); reject(e); });
   });
 }
 function iosOut(args) {
@@ -218,46 +220,97 @@ function iosOut(args) {
 }
 
 // Ein Tunnel-Dienst für alle Geräte (iOS 17+), ohne Admin-Rechte. Koppelt neue Geräte selbst (Dialog auf dem iPhone).
+// Wird alle 30 s geprüft: auch ein Tunnel, den nicht dieser Server gestartet hat (alte Instanz), kann wegfallen,
+// und ohne Tunnel fallen alle Handys aus. Läuft der eigene Tunnel, ist nichts zu prüfen.
+let tunnel = null, tunnelChecking = false;
 async function ensureTunnel() {
-  if (!(await iosOut(['tunnel', 'ls'])).includes('agent is not running')) return;
-  const child = spawn(IOS, ['tunnel', 'start', '--userspace'], { cwd: DATA, stdio: ['ignore', logFile('tunnel.log'), logFile('tunnel.log')] });
+  if (tunnel || tunnelChecking) return;
+  tunnelChecking = true;
+  try { if (!(await iosOut(['tunnel', 'ls'])).includes('agent is not running')) return; } finally { tunnelChecking = false; }
+  if (tunnel) return;
+  const child = tunnel = spawn(IOS, ['tunnel', 'start', '--userspace'], { cwd: DATA, stdio: ['ignore', logFile('tunnel.log'), logFile('tunnel.log')] });
   console.log(`Tunnel gestartet (pid ${child.pid})`);
-  child.on('exit', code => { console.log(`Tunnel beendet (code ${code}), Neustart in 5 s`); setTimeout(ensureTunnel, 5000); });
+  const gone = what => { if (tunnel !== child) return; tunnel = null; console.log(`Tunnel ${what}, Neustart in 5 s`); setTimeout(ensureTunnel, 5000); };
+  child.on('exit', code => gone(`beendet (code ${code})`));
+  child.on('error', e => gone(`Fehler (${e.message})`));
 }
 
 // ---------- WDA-Prozess je Gerät mit Neustart ----------
+// dev.reason: kurzer Grund auf Englisch für die Kachel (das Dashboard ist englisch), diag() bleibt das deutsche Protokoll.
+// Ein Neustart-Timer je Handy (dev.retryTimer), damit ein Knopfdruck den wartenden Versuch vorzieht statt einen zweiten zu starten.
+const startGrace = dev => dev.everReady ? 120000 : 300000;   // neues Gerät: Entwicklerbild und erster Start dauern länger
+function scheduleStart(dev, ms) { clearTimeout(dev.retryTimer); dev.retryTimer = setTimeout(() => { dev.retryTimer = null; startWda(dev); }, ms); }
 async function startWda(dev) {
-  if (dev.stopping) return;
-  dev.sid = null; dev.fails = 0; dev.started = Date.now();
+  if (dev.stopping || dev.proc || dev.preparing) return;
+  clearTimeout(dev.retryTimer); dev.retryTimer = null;
+  dev.sid = null; dev.fails = 0; dev.preparing = true; dev.reason = 'Preparing the phone';
   if (!dev.ios) iosOut(['info', '--udid=' + dev.udid]).then(o => { try { const j = JSON.parse(o.trim().split('\n').filter(l => l.startsWith('{')).pop()); dev.ios = j.ProductVersion; dev.model = j.ProductType; } catch {} });
   const log = logFile(`handy-${dev.id}.log`);
   try {
-    if (!(await usbmux.listDevices()).some(d => d.udid === dev.udid)) throw new Error('nicht per USB verbunden');
-    await ios(['image', 'auto', '--udid=' + dev.udid], log);
+    if (!(await usbmux.listDevices()).some(d => d.udid === dev.udid)) { const e = new Error('nicht per USB verbunden'); e.usb = true; throw e; }
+    await ios(['image', 'auto', '--udid=' + dev.udid], log, 180000);
     const marker = path.join(DATA, 'logs', `installed-${dev.udid}`);
     if (!fs.existsSync(marker) || fs.statSync(marker).mtimeMs < fs.statSync(WDA_APP).mtimeMs) {
-      await ios(['install', '--path=' + WDA_APP, '--udid=' + dev.udid], log);
+      await ios(['install', '--path=' + WDA_APP, '--udid=' + dev.udid], log, 180000);
       fs.writeFileSync(marker, new Date().toISOString());
       console.log(`[${dev.name}] WDA installiert.`);
     }
   } catch (e) {
+    dev.preparing = false;
+    dev.reason = e.usb ? 'Not connected over USB. Check the cable.' : 'Preparing the phone failed, trying again';
     diag(dev, `Vorbereitung fehlgeschlagen: ${e.message}, neuer Versuch in 15 s`);
-    return setTimeout(() => startWda(dev), 15000);
+    return scheduleStart(dev, 15000);
   }
+  dev.preparing = false;
+  if (dev.stopping) return;
   const child = spawn(IOS, ['runwda', '--bundleid=' + BUNDLE, '--testrunnerbundleid=' + BUNDLE, '--xctestconfig=WebDriverAgentRunner.xctest',
     '--env=USE_PORT=8100', '--env=MJPEG_SERVER_PORT=9100', '--udid=' + dev.udid], { cwd: DATA, stdio: ['ignore', log, log] });
-  dev.proc = child;
+  dev.proc = child; dev.spawnedAt = Date.now(); dev.reason = 'Starting WDA';
   console.log(`[${dev.name}] WDA gestartet (pid ${child.pid})`);
-  child.on('exit', code => {
-    diag(dev, `WDA beendet (code ${code}), Neustart in 5 s`);
-    dev.proc = null; dev.sid = null;
-    setTimeout(() => startWda(dev), 5000);
-  });
+  // 'error' (go-ios fehlt oder startet nicht) kommt ohne 'exit'; ohne Handler würde er den ganzen Server beenden
+  const ended = what => {
+    if (dev.proc !== child) return;
+    dev.proc = null; dev.sid = null; dev.ready = false; dev.readySince = null; dev.downAt = dev.downAt || Date.now();
+    if (dev.stopping) return;
+    dev.reason = `WDA stopped (${what}), restarting`;
+    diag(dev, `WDA beendet (${what}), Neustart in 5 s`);
+    scheduleStart(dev, 5000);
+  };
+  child.on('exit', (code, sig) => ended(sig ? `Signal ${sig}` : `code ${code}`));
+  child.on('error', e => ended(e.message));
 }
-function killWda(dev) {
-  if (dev.proc) { try { dev.proc.kill('SIGTERM'); } catch {} }
+// Neustart: go-ios beenden, der exit-Handler startet neu. Reagiert go-ios nicht auf SIGTERM (hängt z. B. an einer toten
+// USB-Verbindung), nach 10 s SIGKILL. Früher blieb es dann beim hängenden Prozess, und nichts passierte.
+function killWda(dev, why) {
+  const p = dev.proc; if (!p) return false;
+  dev.restarts = (dev.restarts || 0) + 1; dev.restartAt = Date.now(); dev.reason = why;
+  dev.ready = false; dev.sid = null; dev.readySince = null; dev.downAt = dev.downAt || Date.now();
+  diag(dev, `WDA wird neu gestartet (${why})`);
+  try { p.kill('SIGTERM'); } catch {}
+  setTimeout(() => { if (dev.proc === p) { diag(dev, 'go-ios beendet sich nicht, SIGKILL'); try { p.kill('SIGKILL'); } catch {} } }, 10000);
+  return true;
+}
+// Neustart auf Knopfdruck: läuft go-ios, beenden; wartet ein Versuch (USB, Vorbereitung), ihn sofort ausführen
+function restartWda(dev, who) {
+  if (FAKE) { dev.restarts = (dev.restarts || 0) + 1; dev.restartAt = Date.now(); dev.reason = `Restarted by ${who}`; dev.ready = false; dev.sid = null; dev.readySince = null; dev.downAt = Date.now(); diag(dev, `WDA wird neu gestartet (von ${who})`); return; }
+  if (killWda(dev, `restarted by ${who}`)) return;
+  dev.restarts = (dev.restarts || 0) + 1; dev.restartAt = Date.now();
+  diag(dev, `Neuer Startversuch (von ${who})`);
+  startWda(dev);
+}
+// Zustand für die Kachel: was gerade passiert, statt pauschal "starting"
+function phase(d) {
+  const now = Date.now();
+  if (d.ready) return 'ready';
+  if (d.rebootAt && now - d.rebootAt < 180000) return 'rebooting';
+  if (d.restartAt && now - d.restartAt < 60000) return 'restarting';
+  if (FAKE) return 'offline';
+  if (d.preparing) return 'preparing';
+  if (d.proc) return now - (d.spawnedAt || 0) < startGrace(d) ? 'starting' : 'not responding';
+  return 'offline';
 }
 
+const SLOW_MAX = +process.env.PHONELAB_SLOW_MAX_MS || 180000;   // so lange darf /status schweigen, solange Bilder kommen
 async function health(dev) {
   if (dev.checking) return;   // ein Check je Handy zur Zeit, auch wenn einer bis zum Timeout hängt
   dev.checking = true;
@@ -275,7 +328,7 @@ async function healthCheck(dev) {
   try {
     const r = await wda(dev, 'GET', '/status', undefined, 5000);
     if (!dev.ready && r.value.ready && dev.downAt) diag(dev, `wieder bereit nach ${Math.round((Date.now() - dev.downAt) / 1000)} s`);
-    dev.ready = !!r.value.ready; dev.fails = 0; dev.missed = 0; dev.downAt = null; if (dev.ready) { if (!dev.readySince) dev.readySince = Date.now(); dev.lastReady = Date.now(); }
+    dev.ready = !!r.value.ready; dev.fails = 0; dev.missed = 0; dev.downAt = null; dev.slowSince = null; if (dev.ready) { if (!dev.readySince) dev.readySince = Date.now(); dev.lastReady = dev.readyAt = Date.now(); dev.everReady = true; dev.reason = null; dev.restartAt = null; dev.rebootAt = null; }
     // Bildschirm gesperrt (Auto-Sperre)? Dann ist das Livebild schwarz und Tippen bewirkt nichts
     if (dev.ready) { const lk = await wda(dev, 'GET', '/wda/locked', undefined, 3000).catch(() => null); if (lk) dev.locked = lk.value === true; }
     if (dev.ready && Date.now() - (dev.batteryAt || 0) > 60000) {   // Akku nur einmal je Minute, über die Warteschlange
@@ -284,15 +337,26 @@ async function healthCheck(dev) {
       if (b) dev.battery = b.value.level >= 0 ? Math.round(b.value.level * 100) : null;
     }
   } catch (e) {
-    // Kommen noch Bilder, lebt WDA, nur /status war zu langsam (iPhone ausgelastet): nicht offline melden, nicht neu starten
+    // Kommen noch Bilder, lebt WDA, nur /status war zu langsam (iPhone ausgelastet): nicht offline melden, nicht neu starten.
+    // Schaut keiner zu (ruhendes Handy, kein Bildstrom offen), selbst kurz ein Bild holen. Früher entschied dann /status
+    // allein, und ein ruhendes Handy mit kurzem Hänger wurde offline gemeldet und WDA neu gestartet.
+    // Obergrenze: antwortet /status länger als SLOW_MAX nicht, obwohl Bilder kommen, hängt WDA wirklich (Bilder laufen auf
+    // eigenem Faden weiter): dann wie bisher offline und Neustart.
     const st = streams.get(dev.id);
-    if (dev.ready && st && Date.now() - (st.frameAt || 0) < 5000) { dev.lastReady = Date.now(); dev.slowStatus = (dev.slowStatus || 0) + 1; return; }
+    const frames = dev.ready && ((st && Date.now() - (st.frameAt || 0) < 5000) || await grabFrame(dev, 4000).then(() => true, () => false));
+    if (frames) {
+      dev.slowSince = dev.slowSince || Date.now();
+      if (Date.now() - dev.slowSince < SLOW_MAX) { dev.lastReady = Date.now(); dev.missed = 0; dev.slowStatus = (dev.slowStatus || 0) + 1; return; }
+    }
     // erst beim zweiten Fehlschlag in Folge offline: ein einzelner verpasster Check ist kein Ausfall
     if (dev.ready && (dev.missed = (dev.missed || 0) + 1) < 2) return;
-    if (dev.ready || !dev.downAt) { dev.downAt = Date.now(); diag(dev, `offline: ${e.message}`); }
+    if (dev.ready || !dev.downAt) { dev.downAt = Date.now(); diag(dev, `offline: ${e.message}${frames ? ` (Bilder kamen noch, Status seit ${Math.round((Date.now() - dev.slowSince) / 1000)} s ohne Antwort)` : ''}`); }
+    dev.slowSince = null;
     dev.ready = false; dev.sid = null; dev.readySince = null; dev.missed = 0;
     // erst nach 5 min Startzeit zählen: Entwicklerbild, Installation und erster Start dauern beim neuen Gerät einige Minuten
-    if (dev.proc && Date.now() - dev.started > 300000 && ++dev.fails >= 3) { diag(dev, 'WDA antwortet nicht, Neustart'); dev.fails = 0; killWda(dev); }
+    if (dev.proc && Date.now() - (dev.spawnedAt || 0) > startGrace(dev)) dev.reason = 'WDA is not responding';
+    // nach der Startzeit (2 min, beim neuen Gerät 5 min) und drei Fehlschlägen in Folge neu starten
+    if (dev.proc && Date.now() - (dev.spawnedAt || 0) > startGrace(dev) && ++dev.fails >= 3) { dev.fails = 0; killWda(dev, 'WDA was not responding'); }
   }
 }
 
@@ -411,11 +475,11 @@ function broadcast(dev, st, frame) {
   for (const w of [...st.waiters]) w();
 }
 // Ein aktuelles JPEG für die Bewertung durch Claude: aus dem laufenden Stream, sonst eine kurze eigene Verbindung
-function grabFrame(dev) {
+function grabFrame(dev, timeout = 5000) {
   const st = streams.get(dev.id);
   if (st && st.last && Date.now() - st.lastAt < 1500) return Promise.resolve(st.last);
   return new Promise((resolve, reject) => {
-    const req = http.get({ host: '127.0.0.1', port: dev.mjpeg_port, path: '/', timeout: 5000 }, res => {
+    const req = http.get({ host: '127.0.0.1', port: dev.mjpeg_port, path: '/', timeout }, res => {
       let buf = Buffer.alloc(0);
       res.on('data', c => {
         buf = Buffer.concat([buf, c]);
@@ -576,6 +640,10 @@ const server = http.createServer(async (req, res) => {
       id: d.id, name: d.name, ready: !!d.ready, battery: d.battery ?? null, w: d.w, h: d.h, running: !!(d.proc || FAKE),
       ios: d.ios || null, locked: !!d.locked, uptimeMin: d.readySince ? Math.round((Date.now() - d.readySince) / 60000) : null, offlineMin: !d.ready && d.lastReady ? Math.round((Date.now() - d.lastReady) / 60000) : null,
       lockedBy: d.lockedBy && Date.now() - d.lockAt < LOCK_MS && d.lockedBy !== user.name ? d.lockedBy : null,
+      // was gerade passiert (ready, starting, restarting, rebooting, preparing, not responding, offline), Grund und Neustarts
+      phase: phase(d), reason: d.ready ? null : d.reason || null, restarts: d.restarts || 0,
+      restartAt: d.restartAt ? new Date(d.restartAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : null,
+      ...(user.admin ? { events: (d.events || []).slice(-5).reverse() } : {}),
       today: counts[d.name] || { likes: 0, comments: 0 } })) });
   }
   // Diagnose für Admins: je Handy Zustand, Zähler und die letzten Ausfälle mit Grund
@@ -584,6 +652,7 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, { version: VERSION, now: new Date().toLocaleString('sv'), devices: CFG.devices.map(d => ({
       id: d.id, name: d.name, ready: !!d.ready, locked: !!d.locked, level: d.level || 'normal', battery: d.battery ?? null,
       uptimeMin: d.readySince ? Math.round((Date.now() - d.readySince) / 60000) : null,
+      phase: phase(d), reason: d.reason || null, restarts: d.restarts || 0, goIos: !!d.proc,
       hangups: d.hangups || 0, slowStatus: d.slowStatus || 0, usbErrors: d.usbErrors || 0, events: (d.events || []).slice().reverse() })) });
   }
   // Durchreichung zu einem Zusatzdienst auf diesem Mac (warmup.js auf PHONELAB_AGENT_PORT). Der Server kennt dessen Inhalt
@@ -601,7 +670,19 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'POST' && route === 'cmd' && action === 'reboot') {
     if (!user.admin) return json(res, 403, { error: 'admins only' });
     protokoll(user.name, ip, `${dev.name} reboot`); dev.sid = null;
-    try { await ios(['reboot', '--udid=' + dev.udid], logFile(`handy-${dev.id}.log`)); return json(res, 200, { ok: true }); } catch (e) { return json(res, 502, { ok: false, error: e.message }); }
+    try {
+      await ios(['reboot', '--udid=' + dev.udid], logFile(`handy-${dev.id}.log`), 30000);
+      dev.rebootAt = Date.now(); dev.ready = false; dev.readySince = null; dev.downAt = Date.now(); dev.reason = `Rebooted by ${user.name}`;
+      diag(dev, `Handy wird neu gestartet (von ${user.name})`); return json(res, 200, { ok: true });
+    } catch (e) { diag(dev, `Neustart des Handys fehlgeschlagen: ${e.message}`); return json(res, 502, { ok: false, error: e.message }); }
+  }
+  // WDA neu starten (nicht das ganze Handy): jeder, der das Handy nutzen darf. Hält gerade ein anderer Mensch das Handy,
+  // nur Admins, damit niemandem mitten in der Arbeit die Sitzung weggenommen wird.
+  if (req.method === 'POST' && route === 'cmd' && action === 'restart') {
+    const held = dev.lockedBy && dev.lockedBy !== user.name && !dev.lockService && Date.now() - dev.lockAt < LOCK_MS;
+    if (held && !user.admin) return json(res, 409, { ok: false, error: `${dev.name} is in use by ${dev.lockedBy}` });
+    protokoll(user.name, ip, `${dev.name} restart`); restartWda(dev, user.name);
+    return json(res, 200, { ok: true });
   }
   if (req.method === 'POST' && route === 'cmd' && action === 'quality') {
     const b = await body(req);
@@ -650,12 +731,13 @@ function agentProxy(req, res, user) {
   console.log(`Daten in ${DATA}${FAKE ? ' (Testbetrieb ohne iPhones)' : ''}`);
   if (!FAKE) {
     await ensureTunnel();
+    setInterval(() => ensureTunnel().catch(e => console.log('Tunnel-Prüfung:', e.message)), 30000);
     for (const dev of CFG.devices) {
       // Abweisungen zählen und höchstens alle 30 s ins Log, sonst flutet ein abgestecktes Handy server.log
       const usbErr = e => { dev.usbErrors = (dev.usbErrors || 0) + 1; if (Date.now() - (dev.usbErrAt || 0) > 30000) { dev.usbErrAt = Date.now(); diag(dev, e.message); } };
       usbmux.forward(dev.udid, 8100, dev.wda_port, usbErr);
       usbmux.forward(dev.udid, 9100, dev.mjpeg_port, usbErr);
-      dev.started = Date.now(); startWda(dev);
+      startWda(dev);
     }
   }
   setInterval(() => CFG.devices.forEach(health), +process.env.PHONELAB_HEALTH_MS || 10000);
@@ -667,5 +749,5 @@ function agentProxy(req, res, user) {
   server.listen(PORT, '127.0.0.1', () => console.log(`phone-lab ${VERSION} läuft auf http://127.0.0.1:${PORT}`));
 })();
 
-function shutdown() { for (const d of CFG.devices) { d.stopping = true; killWda(d); } process.exit(0); }
+function shutdown() { for (const d of CFG.devices) { d.stopping = true; if (d.proc) try { d.proc.kill('SIGTERM'); } catch {} } process.exit(0); }
 process.on('SIGINT', shutdown); process.on('SIGTERM', shutdown);

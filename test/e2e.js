@@ -23,7 +23,7 @@ fs.writeFileSync(path.join(DATA, 'users.json'), JSON.stringify({ users: [mkUser(
 const procs = {};
 const start = (key, file, env) => { const p = spawn(process.execPath, [path.join(ROOT, file)], { env: { ...process.env, ...env }, stdio: ['ignore', 'pipe', 'pipe'] }); p.out = ''; p.stdout.on('data', d => p.out += d); p.stderr.on('data', d => p.out += d); procs[key] = p; return p; };
 start('fake', 'test/fake-wda.js', { FAKE_SLOW: '5' });
-start('server', 'server.js', { PHONELAB_FAKE: '1', PHONELAB_DATA: DATA, PHONELAB_HEALTH_MS: '2000' });
+start('server', 'server.js', { PHONELAB_FAKE: '1', PHONELAB_DATA: DATA, PHONELAB_HEALTH_MS: '2000', PHONELAB_SLOW_MAX_MS: '20000' });
 start('agent', 'warmup.js', { PHONELAB_DATA: DATA, WARMUP_FAKE_JUDGE: '3', ANTHROPIC_API_KEY: '' });
 
 let failed = 0;
@@ -156,6 +156,34 @@ const swipe = { path: [{ x: 0.5, y: 0.8, t: 0 }, { x: 0.5, y: 0.2, t: 200 }] };
     ok(dropTap.ok && (await stats(1)).sessions === sess0, 'abgerissene Verbindung: Tipp ok ohne neue Sitzung', { tap: dropTap, sessions: [sess0, (await stats(1)).sessions] });
     ok((await admin.get('/diag')).devices.length === CFG.devices.length && (await va.get('/diag')).status === 403, '/diag nur für Admins');
     ok(/^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d /m.test(procs.server.out), 'Server-Log mit Zeitstempel');
+
+    // 8b2 WDA-Neustart auf Knopfdruck und sichtbarer Zustand
+    const p5 = await phone(admin, 4);
+    ok(p5.phase === 'ready' && p5.restarts === 0 && p5.reason === null, '/devices zeigt Zustand ready, 0 Neustarts', { phase: p5.phase, restarts: p5.restarts, reason: p5.reason });
+    ok((await va.post('/cmd/1/restart')).status === 409, 'VA kann WDA nicht neu starten, solange ein anderer Mensch das Handy hält');
+    const rs = await va.post('/cmd/4/restart'); ok(rs.ok, 'VA startet WDA auf Handy 4 neu, das sie selbst hält', rs);
+    const r3 = await phone(admin, 4);
+    ok(!r3.ready && r3.phase === 'restarting' && r3.restarts === 1 && /va1/.test(r3.reason) && r3.restartAt, 'gleich danach: restarting, 1 Neustart, Grund und Uhrzeit sichtbar', r3);
+    ok(r3.events && r3.events.some(e => /WDA wird neu gestartet \(von va1\)/.test(e.what)) && (await phone(va, 4)).events === undefined, 'Ereignisse nur für Admins in /devices', r3.events);
+    let up3 = false; for (let i = 0; i < 15 && !up3; i++) { await sleep(1000); up3 = (await phone(admin, 4)).ready; }
+    const a3 = await phone(admin, 4);
+    ok(up3 && a3.phase === 'ready' && a3.restarts === 1 && a3.reason === null, 'nach dem Neustart wieder bereit, Zähler bleibt', { phase: a3.phase, restarts: a3.restarts });
+    ok(fs.readFileSync(path.join(DATA, 'logs', 'zugriff.log'), 'utf8').includes('va1') && /Phone 4 restart/.test(fs.readFileSync(path.join(DATA, 'logs', 'zugriff.log'), 'utf8')), 'Neustart steht im Zugriffsprotokoll');
+
+    // 8c Ruhendes Handy 4 ohne Zuschauer (kein Bildstrom offen): /status hängt, WDA liefert aber Bilder über MJPEG
+    const fk4 = p => fetch(`http://127.0.0.1:${CFG.devices.find(d => d.id === 4).wda_port}${p}`);
+    const off4 = () => admin.get('/diag').then(j => j.devices.find(d => d.id === 4).events.filter(e => /^offline/.test(e.what)).map(e => e.what));
+    const offBefore = (await off4()).length;
+    await fk4('/fake/hang?ms=14000');
+    let idleReady = true; for (let i = 0; i < 16; i++) { await sleep(1000); if (!(await phone(admin, 4)).ready) idleReady = false; }
+    ok(idleReady && (await off4()).length === offBefore, 'ruhendes Handy: Status hängt 14 s, Bilder kommen: bleibt bereit', await off4());
+    // hängt /status länger als die Obergrenze (hier 20 s), gilt WDA trotz Bildern als hängend
+    await fk4('/fake/hang?ms=60000');
+    let capDown = false; for (let i = 0; i < 50 && !capDown; i++) { await sleep(1000); capDown = !(await phone(admin, 4)).ready; }
+    ok(capDown && (await off4()).some(w => /Bilder kamen noch/.test(w)), 'Status länger als Obergrenze tot: trotz Bildern offline', await off4());
+    await fk4('/fake/hang?ms=0');
+    let back4 = false; for (let i = 0; i < 20 && !back4; i++) { await sleep(1000); back4 = (await phone(admin, 4)).ready; }
+    ok(back4, 'Handy 4 wieder bereit');
 
     // 9 Dienst aus: Fernsteuerung läuft weiter, /agent antwortet 503
     procs.agent.kill(); await sleep(800);

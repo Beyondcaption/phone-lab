@@ -161,9 +161,16 @@ FileVault an, Firewall an (geprüft am 28.10.2026). Automatische Anmeldung nur, 
   ein Handy trotzdem, zeigt die Kachel "The screen is off" mit Wake, und die nächste Eingabe weckt es zuerst (geht nur ohne Code-Sperre).
 - Hängt der Bildstrom 10 s ohne Bild, verbindet der Server ihn selbst neu (server.log: "Bildstrom hängt").
 - "Phone offline" erst nach zwei verpassten Checks in Folge und nie, solange noch Bilder kommen (dann ist das iPhone nur
-  ausgelastet). Eine abgerissene Verbindung zu WDA ("socket hang up") versucht der Server einmal neu, ohne neue Sitzung.
+  ausgelastet). Schaut keiner zu, holt der Server dafür selbst kurz ein Bild. Schweigt der Status trotz Bildern länger als
+  3 min, hängt WDA wirklich und wird neu gestartet. Eine abgerissene Verbindung zu WDA ("socket hang up") versucht der Server
+  einmal neu, ohne neue Sitzung.
+- WDA-Neustart: nach 2 min Startzeit (neues Gerät 5 min) und drei Fehlschlägen in Folge von selbst. Beendet sich go-ios
+  nicht, nach 10 s hart (SIGKILL). Entwicklerbild und Installation brechen nach 3 min ab und werden wiederholt.
+  Die Kachel zeigt, was gerade passiert (starting, restarting, rebooting, preparing, not responding, offline mit Grund),
+  die Zahl der Neustarts und den Knopf "Restart WDA" (nur WDA, nicht das Handy; im Zugriffsprotokoll).
 - Admins: `<Dashboard-Adresse>/diag` zeigt je Handy die letzten 50 Ausfälle mit Grund und Uhrzeit (USB weg, Port abgewiesen,
-  WDA beendet, Status-Timeout) und Zähler. Dieselben Zeilen stehen mit Zeitstempel in server.log.
+  WDA beendet, Status-Timeout) und Zähler, die große Ansicht die letzten 5. Dieselben Zeilen stehen mit Zeitstempel in server.log.
+- Der Server läuft in launchd als ProcessType Interactive (keine Hintergrund-Drosselung durch macOS); den Tunnel prüft er alle 30 s.
 - Beenden in der Mac-App (Cmd+Q, Dock oder Knopf "Quit and stop server" unten in der Seitenleiste): "Quit and stop server"
   stoppt auch den Server (Handys für alle offline, der Mac darf wieder schlafen), "Keep server running" schließt nur die App.
   Wieder öffnen startet den Server neu. Nach einem Neustart des Macs startet der Server beim Anmelden von selbst.
