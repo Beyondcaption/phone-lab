@@ -5,7 +5,7 @@
  "seed": 839288020,
  "input": {
   "kind": "markets",
-  "brief": "phone-lab: VAs operate 5-10 USB iPhones live from a Mac all day, Instagram account warmup with Claude scroll sessions",
+  "brief": "phone-lab: VAs operate 5-10 USB iPhones live from a Mac all day",
   "theme": "dark",
   "screens": [
    "overview",

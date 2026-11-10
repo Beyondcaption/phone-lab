@@ -10,9 +10,8 @@ Es gibt zwei Rollen von Macs:
 ## Dateien
 
 - server.js: Node-Server ohne Zusatzpakete. Startet WDA je Gerät über go-ios, überwacht es, reicht den Stream durch, nimmt Eingaben an. Nur 127.0.0.1:3000.
-- index.html: Dashboard (Phones, Warmup, Insights, Team, Snippets & notes), charts.js: Diagramme dazu (taste-skill, ohne Pakete).
-- warmup.js: Warmup-Dienst, eigener Prozess (launchd com.phonelab.warmup, 127.0.0.1:3001). Spricht den Server nur über dessen Befehle an (/devices, /frame, /cmd) mit dem Dienst-Token aus service.token; das Dashboard erreicht ihn über /agent/*. Zustand in warmup.json, Logs logs/scroll.jsonl, logs/alerts.log, logs/warmup.log. Selbsttest: `node warmup.js --dry`.
-- test/: `node test/e2e.js` prüft Server und Warmup gegen nachgemachte Handys (geht auch auf Windows), `node test/demo.js` startet eine Vorschau mit Beispieldaten unter http://127.0.0.1:3000.
+- index.html: Dashboard (Phones, Insights, Team, Snippets & notes), charts.js: Diagramme dazu (taste-skill, ohne Pakete).
+- test/: `node test/e2e.js` prüft den Server gegen nachgemachte Handys (geht auch auf Windows), `node test/demo.js` startet eine Vorschau mit Beispieldaten unter http://127.0.0.1:3000.
 - usbmux.js, plist.js: Portweiterleitung über Apples USB-Dienst usbmuxd, ersetzt iproxy.
 - add-device.js: nimmt angesteckte iPhones in devices.json auf, blendet den Entwicklermodus-Schalter ein.
 - devices.json: Geräte (UDID, Ports), Apple-Team-ID, Bundle-ID von WDA.
@@ -61,8 +60,8 @@ Daten liegen unter ~/Library/Application Support/phone-lab (users.json, settings
 App im Programme-Ordner ersetzen, einmal öffnen.
 
 Auf dem Mac mit den iPhones ist phone-lab EIN Programm: ein Fenster mit Dock-Symbol (app/window.swift), das beim Öffnen
-Server und Warmup-Dienst unter launchd einrichtet (nur bei neuer Version oder wenn einer nicht läuft) und das Dashboard zeigt.
-Fenster zu: die Dienste laufen weiter, die VAs merken nichts. Menü View: Reload (Cmd+R), Logs-Ordner öffnen (Cmd+Shift+L).
+den Server unter launchd einrichtet (nur bei neuer Version oder wenn er nicht läuft) und das Dashboard zeigt.
+Fenster zu: der Server läuft weiter, die VAs merken nichts. Menü View: Reload (Cmd+R), Logs-Ordner öffnen (Cmd+Shift+L).
 phone-lab Desk braucht es dort nicht mehr, nur die VAs auf ihren eigenen Rechnern. Lässt sich die Fenster-App beim Bauen nicht
 kompilieren, baut make-app.sh die bisherige Variante (Hintergrunddienst, Dashboard im Browser) und sagt es.
 
@@ -174,14 +173,6 @@ FileVault an, Firewall an (geprüft am 28.10.2026). Automatische Anmeldung nur, 
 - Beenden in der Mac-App (Cmd+Q, Dock oder Knopf "Quit and stop server" unten in der Seitenleiste): "Quit and stop server"
   stoppt auch den Server (Handys für alle offline, der Mac darf wieder schlafen), "Keep server running" schließt nur die App.
   Wieder öffnen startet den Server neu. Nach einem Neustart des Macs startet der Server beim Anmelden von selbst.
-
-## Warmup
-
-- Admin trägt je Handy unter Warmup ein Startdatum und die Nische ein. Ab dem Tag gilt die 14-Tage-Vorlage (ebenda änderbar): Claude-Minuten und Sitzungen, Likes und Kommentare als Tagesziel der VA, Post-Tage.
-- Claude wischt nur (Reels, Verweildauer nach Nische), keine Likes, Kommentare, Follows, DMs, Profilbesuche. Sitzungen starten zufällig im Zeitfenster, mindestens 90 min Abstand. Der Dienst meldet sich am Server als "claude" an; jeder Mensch übernimmt das Handy sofort (Klick ins Bild oder "Take over"), der Dienst bekommt dann 409 bzw. sieht es binnen 3 s in /devices und hört auf.
-- Der Server selbst kennt keinen Warmup: er hat nur einen Dienstzugang (Mensch geht vor), /frame (ein Standbild), die Likes/Kommentare von heute je Handy in /devices und die Durchreichung /agent/* an den Dienst. Läuft der Dienst nicht, zeigt das Dashboard das an, die Fernsteuerung läuft normal.
-- Bewertung je Reel mit Haiku 5.5 (ein Standbild, etwa 0,02 Cent): passt es zur Nische, und zeigt der Bildschirm eine Warnung (Captcha, Sperre, ungewöhnliche Aktivität, Login, irgendein Dialog)? Ohne `ANTHROPIC_API_KEY` in `~/Library/Application Support/phone-lab/.env` laufen keine Sitzungen, weil sonst nichts Warnhinweise erkennt. Kosten je Handy und Tag stehen unter Warmup.
-- Warnung: Sitzung endet, Handy fällt aus dem Plan, roter Hinweis auf der Kachel plus macOS-Mitteilung. Erst nach "Clear" plant Claude wieder.
 
 ## Tageswerte je Handy
 

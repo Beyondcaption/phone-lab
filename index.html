@@ -8,8 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   /* Style: true-black flat (taste-skill seed 839288020). Elevation by lightness alone, colour only on data.
-     Face: a cool monitor ground (#0c0d0f, cards #15171a) and the lime on the warmup progress, the one thing every tile measures.
-     Signature: each phone carries its 14-day warmup strip; today is the lime cell. */
+     Face: a cool monitor ground (#0c0d0f, cards #15171a); the lime marks the one thing that moves, today's work on a phone. */
   :root {
     --ground: #0c0d0f; --surface: #15171a; --raised: #2a2a2a; --active: #222428;
     --border: #1d1f23; --rule: #1a1c20; --control: #444444;
@@ -131,45 +130,20 @@
   .tile.offline .screen img { opacity: .15; }
   .tile.locked .screen { cursor: not-allowed; }
   .tile.locked .screen img { opacity: .45; }
-  .claude { position: absolute; left: 8px; right: 8px; bottom: 8px; display: none; align-items: center; gap: 8px; background: #000; border-radius: 999px; padding: 4px 4px 4px 12px; font-size: var(--fs-small); color: var(--text); }
-  .claude .pulse { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex: none; animation: pulse 1.6s ease-in-out infinite; }
-  .claude span { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .claude button { height: 24px; padding: 0 10px; font-size: var(--fs-small); background: var(--text); color: #000; border-color: var(--text); }
-  .tile.claude-on .claude { display: flex; }
-  @keyframes pulse { 50% { opacity: .25; } }
-
-  /* warmup block: the 14-day strip and today's three tracks */
-  .wu { display: flex; flex-direction: column; gap: 10px; }
-  .wu-head { display: flex; align-items: baseline; gap: 8px; font-size: 13px; color: var(--muted); }
-  .wu-head b { color: var(--text); font-weight: 500; }
-  .wu-head .r { margin-left: auto; }
+  /* today's likes and comments by people on this phone, from the access log */
+  .today { display: flex; gap: 14px; font-size: 13px; color: var(--muted); }
+  .today b { color: var(--text); font-weight: 500; }
   .pill { display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 999px; font-size: var(--fs-small); font-weight: 500; flex: none; white-space: nowrap; }
   .pill.pos { background: var(--pill-positive-bg); color: var(--pill-positive-ink); }
   .pill.warn { background: var(--pill-warning-bg); color: var(--pill-warning-ink); }
   .pill.neg { background: var(--pill-negative-bg); color: var(--pill-negative-ink); }
   .pill.neu { background: var(--pill-neutral-bg); color: var(--pill-neutral-ink); }
-  .strip { display: grid; grid-template-columns: repeat(14, 1fr); gap: 3px; }
-  .strip i { height: 8px; border-radius: 2px; background: var(--raised); }
-  .strip i.past { background: #8a8a8a; }
-  .strip i.today { background: var(--accent); }
-  .track { display: grid; grid-template-columns: 84px 1fr auto; align-items: center; gap: 10px; font-size: var(--fs-small); color: var(--muted); }
-  .track > span:first-child { white-space: nowrap; }
-  /* narrow tiles (tablet, phone): label and figure on one line, the bar under them; app buttons live in the focus view */
+  /* narrow tiles (tablet, phone): app buttons live in the focus view */
   .tile { container-type: inline-size; }
   @container (max-width: 250px) {
-    .track { grid-template-columns: 1fr auto; row-gap: 5px; }
-    .track .bar { grid-column: 1 / -1; grid-row: 2; }
-    .track .num { min-width: 0; }
     .ctrl .app, .ctrl .sec { display: none; }
     .t-handle { display: none; }
-    .wu-head { flex-wrap: wrap; }
   }
-  .track .bar { height: 6px; background: var(--raised); border-radius: 999px; overflow: hidden; }
-  .track .bar i { display: block; height: 100%; width: 0; background: var(--accent); border-radius: 999px; transition: width .4s ease; }
-  .track.full .bar i { background: #e6e6e6; }
-  .track .num { color: var(--text); min-width: 64px; text-align: right; }
-  .track .num em { font-style: normal; color: var(--faint); }
-  .wu-empty { color: var(--faint); font-size: 13px; }
 
   .ctrl { display: flex; flex-direction: column; gap: 8px; }
   .ctrl .row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
@@ -258,7 +232,6 @@
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <symbol id="i-phones" viewBox="0 0 16 16"><rect x="4" y="1.5" width="8" height="13" rx="1.8" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M7 12.2h2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
-  <symbol id="i-warmup" viewBox="0 0 16 16"><path d="M2 12.5c2.2 0 2.2-3 4.4-3s2.2 3 4.4 3 2.2-6 3.2-9" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
   <symbol id="i-insights" viewBox="0 0 16 16"><path d="M3 13V8M8 13V3M13 13V6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
   <symbol id="i-team" viewBox="0 0 16 16"><circle cx="6" cy="5.5" r="2.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M1.8 13.5c.6-2.4 2.2-3.6 4.2-3.6s3.6 1.2 4.2 3.6M10.5 3.2a2.5 2.5 0 0 1 0 4.6M12.2 10.2c1 .6 1.7 1.7 2 3.3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
   <symbol id="i-snippets" viewBox="0 0 16 16"><path d="M3 4h10M3 8h10M3 12h6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
@@ -271,9 +244,8 @@
 
 <nav id="side" aria-label="Main">
   <div class="brand"><svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><rect x="5.5" y="1.5" width="11" height="19" rx="3" fill="none" stroke="#fff" stroke-width="1.6"/><rect x="8" y="6" width="6" height="9" rx="1" fill="#c6f24e"/></svg>phone-lab</div>
-  <a class="nav on" href="#phones" data-view="phones"><svg width="16" height="16"><use href="#i-phones"/></svg>Phones<span class="count" id="alertCount" hidden></span></a>
+  <a class="nav on" href="#phones" data-view="phones"><svg width="16" height="16"><use href="#i-phones"/></svg>Phones</a>
   <div class="navlabel admin-only" hidden>Manage</div>
-  <a class="nav admin-only" href="#warmup" data-view="warmup" hidden><svg width="16" height="16"><use href="#i-warmup"/></svg>Warmup</a>
   <a class="nav admin-only" href="#insights" data-view="insights" hidden><svg width="16" height="16"><use href="#i-insights"/></svg>Insights</a>
   <a class="nav admin-only" href="#team" data-view="team" hidden><svg width="16" height="16"><use href="#i-team"/></svg>Team</a>
   <a class="nav admin-only" href="#snippets" data-view="snippets" hidden><svg width="16" height="16"><use href="#i-snippets"/></svg>Snippets &amp; notes</a>
@@ -301,39 +273,6 @@
       <button id="streamAll" hidden title="Solo is on: only one phone streams. Stream every phone again." onclick="setSolo(null)">Stream all</button>
     </div>
     <div id="grid"></div>
-  </section>
-
-  <!-- Warmup -->
-  <section id="v-warmup" data-v="warmup" hidden>
-    <div class="titlerow">
-      <div><h1 class="vt">Warmup</h1><p class="finding" id="wuFinding"></p></div>
-      <span class="stamp" id="wuStamp"></span>
-    </div>
-    <div class="panel">
-      <div class="p-head"><h2>Phones</h2><span class="r">Claude only scrolls. Likes and comments stay with the VA.</span></div>
-      <div class="tablewrap"><table id="wuTable"><thead><tr><th>Phone</th><th>Start date</th><th>Niche</th><th>Day</th><th class="num">Claude today</th><th class="num">Cost today</th><th>Today's sessions</th><th>Paused</th><th></th></tr></thead><tbody></tbody></table></div>
-    </div>
-    <div class="panel">
-      <div class="sec">
-        <div class="lead"><h2>Session window</h2><p>Claude's sessions start at random times inside this window, at least 90 minutes apart.</p></div>
-        <div>
-          <div class="fields">
-            <label class="field">From <input type="time" id="wFrom"></label>
-            <label class="field">Until <input type="time" id="wTo"></label>
-            <button id="wSave" class="primary">Save window</button>
-            <span class="stamp" id="wMsg"></span>
-          </div>
-          <p class="stamp" id="wKey" style="margin:14px 0 0"></p>
-        </div>
-      </div>
-      <div class="sec">
-        <div class="lead"><h2>14-day plan</h2><p>One row per warmup day. Claude minutes are split over the sessions; likes and comments are the VA's daily target on that phone. A post is due on the days marked.</p></div>
-        <div>
-          <div class="tablewrap"><table id="tplTable"><thead><tr><th>Day</th><th class="num">Claude min</th><th class="num">Sessions</th><th class="num">Likes</th><th class="num">Comments</th><th>Post due</th></tr></thead><tbody></tbody></table></div>
-          <div class="save-row"><button id="tplSave" class="primary">Save plan</button><span class="stamp" id="tplMsg"></span></div>
-        </div>
-      </div>
-    </div>
   </section>
 
   <!-- Insights -->
@@ -488,10 +427,9 @@ function phoneView(d, big) {
     <div class="screen"><img alt="Live screen of ${esc(d.name)}" draggable="false"><canvas></canvas><span class="typing">Typing to phone</span><span class="toast" role="status"></span>
       <div class="paused">Stream paused</div><div class="offline"><span class="otext">Phone offline</span><span class="ometa"></span><button class="restart" title="Restart WDA on this phone (not the phone itself)">Restart WDA</button></div>
       <div class="asleep"><span>The screen is off (auto-lock).</span><button class="wake">Wake</button></div></div>
-      <div class="claude"><span class="pulse"></span><span class="ctext">Claude is scrolling</span><button class="cstop">Take over</button></div></div>
-    <div class="alert" hidden><span></span>${state.admin ? '<button class="clear">Clear</button>' : ''}</div>
+</div>
     <div class="note" hidden></div>
-    <div class="wu"></div>
+    <div class="today"></div>
     <div class="ctrl">
       <div class="row"><input type="text" placeholder="Type text, Enter sends" aria-label="Text for ${esc(d.name)}"><button class="send">Send</button></div>
       <div class="row"><button class="icon home" title="Home (H)" aria-label="Home">${icon('home')}</button><button class="icon back" title="Back, swipe from the left edge (B)" aria-label="Back">${icon('back')}</button>
@@ -560,8 +498,6 @@ function phoneView(d, big) {
   $$('.app', el).forEach(b => b.onclick = () => post(d.id, 'launch', { app: b.dataset.app }));
   $('.shot', el).onclick = () => saveShot(d, img);
   $('.auto', el).onclick = () => state.auto[d.id] ? stopAuto(d.id) : startAuto(d.id, +$('.sec', el).value);
-  $('.cstop', el).onclick = () => jpost(`/agent/phones/${d.id}/stop`).then(() => { note(d.id, 'Claude stopped, the phone is yours'); refresh(); });
-  if ($('.clear', el)) $('.clear', el).onclick = () => jpost(`/agent/phones/${d.id}/clear`).then(refresh);
   if (!big) { $('.open', el).onclick = () => openFocus(d.id); $('.t-name', el).onclick = () => openFocus(d.id); $('.solo', el).onclick = () => setSolo(state.solo === d.id ? null : d.id); }
   el.decorate = () => {
     $('.t-handle', el).textContent = state.settings.labels[d.id] || '';
@@ -572,31 +508,11 @@ function phoneView(d, big) {
   return el;
 }
 
-// warmup block of a tile, from /devices
-function renderWarmup(el, d) {
-  const w = d.warmup, box = $('.wu', el);
-  if (!state.agent) {
-    const html = state.admin ? '<div class="wu-empty">Warmup service not running</div>' : '';
-    if (box._html !== html) { box.innerHTML = html; box._html = html; }
-    return;
-  }
-  if (!w || !w.day) {
-    const msg = w && w.start ? `Warmup starts ${esc(w.start)}` : 'No warmup set for this phone';
-    const html = `<div class="wu-empty">${msg}${state.admin ? ' · <a href="#warmup">Set up</a>' : ''}</div>`;
-    if (box._html !== html) { box.innerHTML = html; box._html = html; }
-    return;
-  }
-  const t = w.today || {}, done = w.done || {};
-  const cells = Array.from({ length: w.of }, (_, i) => `<i class="${i + 1 < w.day ? 'past' : i + 1 === w.day ? 'today' : ''}" title="Day ${i + 1}"></i>`).join('');
-  const track = (label, have, want, unit) => {
-    const ratio = want ? Math.min(1, have / want) : 0, full = want && have >= want;
-    return `<div class="track${full ? ' full' : ''}"><span>${label}</span><span class="bar"><i style="width:${(ratio * 100).toFixed(1)}%"></i></span><span class="num">${want ? `${have} <em>/ ${want}${unit}</em>` : '<em>none today</em>'}</span></div>`;
-  };
-  const status = w.paused ? '<span class="pill neu r">Paused</span>' : w.finished ? '<span class="pill pos r">Warmed up</span>' : t.post ? '<span class="pill warn r">Post due today</span>' : '';
-  const html = w.finished ? `<div class="wu-head"><b>Warmup finished</b><span>${w.of} days</span>${status}</div><div class="strip">${cells}</div>`
-    : `<div class="wu-head"><b>Day ${w.day}</b><span>of ${w.of}</span>${status}</div><div class="strip">${cells}</div>
-      ${track('Claude scroll', Math.round(done.scrollMin || 0), t.scroll, ' min')}${track('Likes', done.likes || 0, t.likes, '')}${track('Comments', done.comments || 0, t.comments, '')}`;
-  if (box._html !== html) { box.innerHTML = html; box._html = html; }
+// today's likes and comments by people on this phone (from the access log)
+function renderToday(el, d) {
+  const t = d.today || { likes: 0, comments: 0 };
+  const html = `<span>Today</span><span><b class="num">${t.likes}</b> ${t.likes === 1 ? 'like' : 'likes'}</span><span><b class="num">${t.comments}</b> ${t.comments === 1 ? 'comment' : 'comments'}</span>`;
+  const box = $('.today', el); if (box._html !== html) { box.innerHTML = html; box._html = html; }
 }
 
 function saveShot(d, img) {
@@ -632,10 +548,8 @@ function stopAuto(id) {
   $$(`[data-id="${id}"] .auto`).forEach(b => { b.classList.remove('on'); b.textContent = 'Auto'; });
 }
 document.addEventListener('visibilitychange', () => document.hidden && Object.keys(state.auto).forEach(id => stopAuto(+id)));
-// the warmup service signs in as "claude" (PHONELAB_SERVICE_NAME); a person can always take a phone from it
-const SERVICE_NAME = 'claude';
-const heldByPerson = d => !!d.lockedBy && d.lockedBy !== SERVICE_NAME;
-$('#autoAll').onclick = () => state.devices.filter(d => d.ready && !heldByPerson(d) && !(d.warmup && d.warmup.claude)).forEach(d => startAuto(d.id, +$('#allSec').value));
+const heldByPerson = d => !!d.lockedBy;
+$('#autoAll').onclick = () => state.devices.filter(d => d.ready && !heldByPerson(d)).forEach(d => startAuto(d.id, +$('#allSec').value));
 $('#stopAll').onclick = () => Object.keys(state.auto).forEach(id => stopAuto(+id));
 
 // ---------- focus view with direct typing ----------
@@ -685,7 +599,7 @@ document.addEventListener('keydown', e => {
 $('#typemode').onclick = () => setTyping(!state.typing);
 
 // ---------- views (hash routes) ----------
-const VIEWS = ['phones', 'warmup', 'insights', 'team', 'snippets'];
+const VIEWS = ['phones', 'insights', 'team', 'snippets'];
 // one h1 in the document: the title of the visible view; the hidden views keep theirs as h2
 function retag(el, tag) {
   if (el.tagName.toLowerCase() === tag) return;
@@ -700,7 +614,7 @@ function route() {
   $$('.nav').forEach(a => a.classList.toggle('on', a.dataset.view === v));
   $('#side').classList.remove('open');
   syncAll();
-  if (v === 'warmup') loadWarmup(); if (v === 'insights') loadInsights(); if (v === 'team') loadTeam(); if (v === 'snippets') loadSnippets();
+  if (v === 'insights') loadInsights(); if (v === 'team') loadTeam(); if (v === 'snippets') loadSnippets();
 }
 window.addEventListener('hashchange', route);
 $('#menuBtn').onclick = () => $('#side').classList.toggle('open');
@@ -723,64 +637,6 @@ $('#sSave').onclick = async () => {
   $$('.sLabel').forEach(t => { if (t.value.trim()) body.labels[t.dataset.id] = t.value.trim(); });
   const j = await jpost('/settings', body);
   $('#sMsg').textContent = j.ok ? 'Saved ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Error: ' + j.error; if (j.ok) loadSettings();
-};
-
-// ---------- warmup (admins) ----------
-let wuCfg = null;
-async function loadWarmup() {
-  wuCfg = state.agent && state.agent.config;
-  if (!wuCfg) { await refresh(); wuCfg = state.agent && state.agent.config; }
-  if (!wuCfg) { $('#wuFinding').innerHTML = '<span class="lock">The warmup service is not running on the Mac. Phones work as usual; open phone-lab once to start the service.</span>'; $('#wuTable tbody').innerHTML = ''; $('#tplTable tbody').innerHTML = ''; return; }
-  $('#wFrom').value = wuCfg.window[0]; $('#wTo').value = wuCfg.window[1];
-  $('#wKey').innerHTML = wuCfg.hasKey ? `Reels are rated by ${esc(wuCfg.model)} for the niche; a warning on screen stops the session.`
-    : '<span class="lock">No ANTHROPIC_API_KEY in .env: no sessions run, because without Claude looking at the screen nothing would catch a warning.</span>';
-  $('#tplTable tbody').innerHTML = wuCfg.template.map((t, i) => `<tr data-i="${i}"><td>Day ${i + 1}</td>
-    <td class="num"><input type="number" min="0" max="240" data-k="scroll" value="${t.scroll}" aria-label="Claude minutes day ${i + 1}"></td>
-    <td class="num"><input type="number" min="1" max="6" data-k="sessions" value="${t.sessions}" aria-label="Sessions day ${i + 1}"></td>
-    <td class="num"><input type="number" min="0" max="200" data-k="likes" value="${t.likes}" aria-label="Likes day ${i + 1}"></td>
-    <td class="num"><input type="number" min="0" max="50" data-k="comments" value="${t.comments}" aria-label="Comments day ${i + 1}"></td>
-    <td><label class="switch"><input type="checkbox" data-k="post" ${t.post ? 'checked' : ''} aria-label="Post due day ${i + 1}"><i></i></label></td></tr>`).join('');
-  renderWarmupTable();
-}
-function renderWarmupTable() {
-  if (!wuCfg) return;
-  const rows = state.devices.map(d => {
-    const w = d.warmup || {}, t = w.today || {}, done = w.done || {};
-    const dayTxt = w.finished ? 'Finished' : w.day ? `${w.day} of ${w.of}` : w.start ? 'Not started' : '–';
-    const sess = (w.sessions || []).map(s => `<span class="pill ${s.status === 'done' ? 'pos' : s.status === 'running' ? 'warn' : s.status === 'planned' ? 'neu' : 'neg'}" title="${esc(s.status)}">${esc(s.at)} · ${s.minutes} min</span>`).join(' ') || '<span class="stamp">–</span>';
-    return `<tr data-id="${d.id}"><td style="min-width:${w.alert ? 210 : 110}px"><span style="white-space:nowrap">${esc(d.name)}</span><span class="sub">${esc(state.settings.labels[d.id] || 'no label')}</span>${w.alert ? `<span class="sub" style="color:var(--pill-negative-ink)">Stopped: ${esc(w.alert.reason)}</span>` : ''}</td>
-      <td><input type="date" class="wStart" value="${esc(w.start || '')}" aria-label="Start date ${esc(d.name)}"></td>
-      <td><input type="text" class="wNiche" value="${esc(w.niche || '')}" placeholder="e.g. Gaming, Cosplay" aria-label="Niche ${esc(d.name)}"></td>
-      <td class="num" style="white-space:nowrap">${dayTxt}</td>
-      <td class="num">${t.scroll ? `${Math.round(done.scrollMin || 0)} <span class="stamp">/ ${t.scroll} min</span>` : '<span class="stamp">–</span>'}</td>
-      <td class="num">${done.cost ? '$' + done.cost.toFixed(3) : '<span class="stamp">$0.000</span>'}</td>
-      <td style="min-width:150px">${sess}</td>
-      <td><label class="switch"><input type="checkbox" class="wPaused" ${w.paused ? 'checked' : ''} aria-label="Pause ${esc(d.name)}"><i></i></label></td>
-      <td style="text-align:right;white-space:nowrap">${w.alert ? '<button class="danger wClear">Clear alert</button> ' : ''}${w.claude ? '<button class="wStop">Stop</button>' : `<button class="wRun" ${d.ready ? '' : 'disabled title="Phone not ready"'}title="Start a 10-minute session now">Run 10m</button>`}</td></tr>`;
-  });
-  const tb = $('#wuTable tbody');
-  if (document.activeElement && tb.contains(document.activeElement)) return;   // do not redraw under the cursor
-  tb.innerHTML = rows.join('');
-  $$('#wuTable tbody tr').forEach(tr => {
-    const id = +tr.dataset.id, save = b => jpost('/agent/config', { phone: id, ...b }).then(() => { $('#wuStamp').textContent = 'Saved ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); refresh(); });
-    $('.wStart', tr).onchange = e => save({ start: e.target.value || null });
-    $('.wNiche', tr).onchange = e => save({ niche: e.target.value });
-    $('.wPaused', tr).onchange = e => save({ paused: e.target.checked });
-    if ($('.wRun', tr)) $('.wRun', tr).onclick = () => jpost(`/agent/phones/${id}/run`, { minutes: 10 }).then(j => { if (!j.ok) $('#wuStamp').textContent = 'Error: ' + j.error; refresh(); });
-    if ($('.wStop', tr)) $('.wStop', tr).onclick = () => jpost(`/agent/phones/${id}/stop`).then(refresh);
-    if ($('.wClear', tr)) $('.wClear', tr).onclick = () => jpost(`/agent/phones/${id}/clear`).then(refresh);
-  });
-  const active = state.devices.filter(d => d.warmup && d.warmup.day && !d.warmup.finished);
-  const mins = active.reduce((a, d) => a + Math.round((d.warmup.done || {}).scrollMin || 0), 0), want = active.reduce((a, d) => a + ((d.warmup.today || {}).scroll || 0), 0);
-  const cost = state.devices.reduce((a, d) => a + ((d.warmup && d.warmup.done && d.warmup.done.cost) || 0), 0);
-  const alerts = state.devices.filter(d => d.warmup && d.warmup.alert).length;
-  $('#wuFinding').innerHTML = active.length ? `<b>${active.length}</b> ${active.length === 1 ? 'phone' : 'phones'} warming up · Claude scrolled <b>${mins}</b> of ${want} min today · $${cost.toFixed(3)}${alerts ? ` · <b style="color:var(--pill-negative-ink)">${alerts} ${alerts === 1 ? 'alert' : 'alerts'}</b>` : ''}`
-    : 'No phone is warming up. Set a start date to begin.';
-}
-$('#wSave').onclick = async () => { const j = await jpost('/agent/config', { window: [$('#wFrom').value, $('#wTo').value] }); $('#wMsg').textContent = j.ok ? 'Saved' : 'Error: ' + j.error; refresh(); };
-$('#tplSave').onclick = async () => {
-  const template = $$('#tplTable tbody tr').map(tr => { const o = {}; $$('input', tr).forEach(i => o[i.dataset.k] = i.type === 'checkbox' ? i.checked : +i.value); return o; });
-  const j = await jpost('/agent/config', { template }); $('#tplMsg').textContent = j.ok ? 'Saved ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Error: ' + j.error; refresh();
 };
 
 // ---------- team (admins) ----------
@@ -825,9 +681,9 @@ async function loadInsights() { insData = await fetch('/insights').then(r => r.j
 function renderInsights() {
   if (!insData) return;
   const rows = insData[insRange] || [];
-  const total = rows.reduce((a, r) => a + r.minutes, 0), people = new Set(rows.filter(r => r.user !== 'claude').map(r => r.user)).size;
+  const total = rows.reduce((a, r) => a + r.minutes, 0), people = new Set(rows.map(r => r.user)).size;
   const nPhones = new Set(rows.map(r => r.phone)).size;
-  $('#insFinding').innerHTML = rows.length ? `<b>${total}</b> min on ${nPhones} ${nPhones === 1 ? 'phone' : 'phones'} by ${people} ${people === 1 ? 'person' : 'people'}${rows.some(r => r.user === 'claude') ? ' and Claude' : ''}` : 'No activity in this range';
+  $('#insFinding').innerHTML = rows.length ? `<b>${total}</b> min on ${nPhones} ${nPhones === 1 ? 'phone' : 'phones'} by ${people} ${people === 1 ? 'person' : 'people'}` : 'No activity in this range';
   $('#insTable tbody').innerHTML = rows.length ? rows.map(r => `<tr><td>${esc(r.user)}</td><td>${esc(r.phone)}</td><td class="num">${r.minutes}</td><td class="num">${r.sessions}</td><td class="num">${r.actions}</td><td class="num">${r.texts || 0}</td><td class="num">${r.likes}</td><td class="num">${fmtAgo(r.last)}</td></tr>`).join('')
     : '<tr><td colspan="8"><div class="empty">No activity in this range.</div></td></tr>';
   const hist = insData.history || [];
@@ -856,7 +712,7 @@ async function refreshMe() {
 }
 
 // ---------- status refresh ----------
-let statusCache = [], seenAlerts = null;
+let statusCache = [];
 // the browser asks once for permission to notify, on the first click; the desktop app allows it without asking
 document.addEventListener('pointerdown', () => { if (window.Notification && Notification.permission === 'default') Notification.requestPermission(); }, { once: true });
 function health(d) {
@@ -880,8 +736,7 @@ const phaseText = d => PHASE_TEXT[d.phase] || (d.reason ? `Phone offline: ${d.re
 function restartWda(id) { post(id, 'restart').then(j => { if (j && j.ok) { note(id, 'Restarting WDA'); refresh(); } }); }
 function refreshStatus() {
   for (const d of statusCache) $$(`[data-id="${d.id}"].tile`).forEach(el => {
-    const w = d.warmup || {}, claude = !!w.claude;
-    el.classList.toggle('locked', heldByPerson(d)); el.classList.toggle('offline', !d.ready); el.classList.toggle('claude-on', claude);
+    el.classList.toggle('locked', heldByPerson(d)); el.classList.toggle('offline', !d.ready);
     el.classList.toggle('asleep', !!d.locked);
     const busy = ['starting', 'restarting', 'rebooting', 'preparing'].includes(d.phase);
     const dot = $('.dot', el); dot.classList.toggle('on', d.ready); dot.classList.toggle('starting', !d.ready && busy);
@@ -889,9 +744,7 @@ function refreshStatus() {
     $('.otext', el).textContent = phaseText(d);
     $('.ometa', el).textContent = [d.offlineMin >= 1 ? `Not ready for ${d.offlineMin} min` : '', d.restarts ? `${d.restarts} WDA ${d.restarts === 1 ? 'restart' : 'restarts'}${d.restartAt ? ', last ' + d.restartAt : ''}` : ''].filter(Boolean).join(' · ');
     $('.restart', el).hidden = d.phase === 'restarting' || d.phase === 'rebooting';
-    const al = $('.alert', el); al.hidden = !w.alert; if (w.alert) $('span', al).textContent = `Stopped: ${w.alert.reason}. ${state.admin ? 'Check the phone, then clear.' : 'Tell an admin.'}`;
-    if (claude) { const m = Math.max(1, Math.round((Date.now() - w.claude.since) / 60000)); $('.ctext', el).textContent = `Claude scrolls · ${m}/${w.claude.minutes} min`; $('.ctext', el).title = `Claude is scrolling, minute ${m} of ${w.claude.minutes}, ${w.claude.reels} reels`; }
-    renderWarmup(el, d);
+    renderToday(el, d);
     const m = $('.msg', el);
     if (heldByPerson(d)) m.innerHTML = `<span class="lock">In use by ${esc(d.lockedBy)}</span>`;
     else if (m.querySelector('.lock')) m.textContent = '';
@@ -904,23 +757,11 @@ function refreshStatus() {
       + (state.admin ? ` <button class="danger" style="height:26px" onclick="rebootPhone(${d.id})">Reboot phone</button>` : '') + ev;
   }
   // the finding: what needs a person first
-  const ready = statusCache.filter(d => d.ready).length, alerts = statusCache.filter(d => d.warmup && d.warmup.alert), claude = statusCache.filter(d => d.warmup && d.warmup.claude);
-  const due = statusCache.filter(d => d.warmup && d.warmup.today && !d.warmup.paused && !d.warmup.alert && ((d.warmup.done.likes || 0) < d.warmup.today.likes || (d.warmup.done.comments || 0) < d.warmup.today.comments));
-  const bits = [];
-  if (alerts.length) bits.push(`<b style="color:var(--pill-negative-ink)">${alerts.map(d => esc(d.name)).join(', ')} stopped by the watch</b>`);
-  if (due.length) bits.push(`<b>${due.length}</b> ${due.length === 1 ? 'phone needs' : 'phones need'} likes or comments today`);
-  if (claude.length) bits.push(`Claude is scrolling on ${claude.map(d => esc(d.name)).join(', ')}`);
-  bits.push(`${ready} of ${statusCache.length} ready`);
+  const ready = statusCache.filter(d => d.ready).length, busy = statusCache.filter(heldByPerson);
+  const bits = [`${ready} of ${statusCache.length} ready`];
+  if (busy.length) bits.push(`in use: ${busy.map(d => `${esc(d.name)} (${esc(d.lockedBy)})`).join(', ')}`);
   $('#finding').innerHTML = bits.join(' · ');
-  const ac = $('#alertCount'); ac.hidden = !alerts.length; ac.textContent = alerts.length;
-  // new alerts as a system notification (desktop app and browser); the first load only remembers what is already there
-  const firstLoad = !seenAlerts; if (firstLoad) seenAlerts = new Set();
-  for (const d of alerts) {
-    const key = d.id + '|' + d.warmup.alert.at;
-    if (!firstLoad && !seenAlerts.has(key) && window.Notification && Notification.permission === 'granted') new Notification(`phone-lab: ${d.name} stopped`, { body: d.warmup.alert.reason });
-    seenAlerts.add(key);
-  }
-  $('#sideFoot').innerHTML = `${statusCache.length} phones over USB<br>Version ${esc(state.version || '?')}${state.agent ? '' : ' · warmup off'}`;
+  $('#sideFoot').innerHTML = `${statusCache.length} phones over USB<br>Version ${esc(state.version || '?')}`;
   // only inside the Mac app on the phones' Mac: quit the app and stop the server (VAs lose access until it is opened again)
   if (window.webkit && webkit.messageHandlers && webkit.messageHandlers.phonelab && !$('#quitApp')) {
     const b = document.createElement('button'); b.id = 'quitApp'; b.className = 'danger'; b.textContent = 'Quit and stop server';
@@ -930,12 +771,10 @@ function refreshStatus() {
 }
 function rebootPhone(id) { if (confirm('Reboot this phone? It will be offline for about a minute.')) post(id, 'reboot').then(j => j && j.ok && note(id, 'Rebooting')); }
 async function refresh() {
-  // the warmup service is its own process; the server only passes /agent/* through. Down = no warmup data, phones still work.
-  const [r, agent] = await Promise.all([fetch('/devices').catch(() => null), fetch('/agent/phones').then(x => x.ok ? x.json() : null).catch(() => null)]);
+  const r = await fetch('/devices').catch(() => null);
   if (!r) return; if (r.status === 401) return location.href = '/login';
   const { user, admin, devices, version } = await r.json();
-  state.agent = agent; state.version = version;
-  for (const d of devices) d.warmup = agent ? agent.phones[d.id] || null : null;
+  state.version = version;
   const first = !state.user;
   state.user = user; state.admin = admin; state.devices = devices; statusCache = devices;
   $('#who').textContent = user;
@@ -943,7 +782,6 @@ async function refresh() {
   if (first) { await loadSettings(); route(); }
   for (const d of devices) if (!$(`#grid [data-id="${d.id}"]`)) $('#grid').appendChild(phoneView(d, false));
   refreshStatus();
-  if (state.view === 'warmup') renderWarmupTable();
   if (!levelApplied && devices.some(d => d.ready) && streamLevel() !== 'normal') { levelApplied = true; applyLevel(); }
 }
 // show the view from the address at once; refresh() corrects it when /devices says who is signed in

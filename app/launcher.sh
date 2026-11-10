@@ -28,10 +28,15 @@ if [[ ! -f "$DATA/users.json" ]]; then
 fi
 
 if [[ -n "$PHONELAB_NO_LAUNCHD" ]]; then echo "ready: $DATA, version $VER"; exit 0; fi
-# Fenster nur neu geöffnet, gleiche Version, beide Dienste antworten: nichts neu starten (sonst fliegen die VAs kurz raus)
+# Fenster nur neu geöffnet, gleiche Version, Server antwortet: nichts neu starten (sonst fliegen die VAs kurz raus)
 if [[ -n "$PHONELAB_FROM_WINDOW" && "$(cat "$DATA/.installed-version" 2>/dev/null)" == "$VER" ]] \
-   && curl -s -o /dev/null --max-time 2 http://127.0.0.1:3000/login && curl -s -o /dev/null --max-time 2 http://127.0.0.1:3001/; then
+   && curl -s -o /dev/null --max-time 2 http://127.0.0.1:3000/login; then
   exit 0
+fi
+# Warmup-Dienst früherer Versionen entfernen (phone-lab ist reine Fernsteuerung durch Menschen)
+WL=~/Library/LaunchAgents/com.phonelab.warmup.plist
+if [[ -f "$WL" ]]; then
+  launchctl bootout "gui/$(id -u)/com.phonelab.warmup" >/dev/null 2>&1; rm -f "$WL" "$DATA/service.token"; echo "$(date) alten Warmup-Dienst entfernt" >> "$DATA/logs/app.log"
 fi
 # Dienst: Autostart nach Login, Mac schläft nicht, Neustart bei Absturz
 PL=~/Library/LaunchAgents/com.phonelab.server.plist; mkdir -p ~/Library/LaunchAgents
@@ -49,29 +54,13 @@ cat > "$PL" <<P
 </dict></plist>
 P
 launchctl bootout "gui/$(id -u)/com.phonelab.server" >/dev/null 2>&1; sleep 1
-# Was jetzt noch auf Port 3000 oder 3001 lauscht, ist eine alte Installation (Ordner, Terminal, Start.command):
+# Was jetzt noch auf Port 3000 lauscht, ist eine alte Installation (Ordner, Terminal, Start.command):
 # beenden, sonst bekommt der neue Dienst den Port nicht und das alte Dashboard bleibt sichtbar
-for PID in $(lsof -tiTCP:3000 -sTCP:LISTEN 2>/dev/null) $(lsof -tiTCP:3001 -sTCP:LISTEN 2>/dev/null); do
+for PID in $(lsof -tiTCP:3000 -sTCP:LISTEN 2>/dev/null); do
   echo "$(date) beende alten Prozess $PID: $(ps -o command= -p $PID)" >> "$DATA/logs/app.log"; kill $PID 2>/dev/null
 done
 sleep 1
 launchctl bootstrap "gui/$(id -u)" "$PL" >> "$DATA/logs/app.log" 2>&1
-# Warmup-Dienst: eigener Prozess, spricht den Server nur über dessen Befehle an (Dienst-Token in $DATA/service.token)
-WL=~/Library/LaunchAgents/com.phonelab.warmup.plist
-cat > "$WL" <<P
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0"><dict>
-  <key>Label</key><string>com.phonelab.warmup</string>
-  <key>ProgramArguments</key><array><string>$R/bin/node</string><string>$R/warmup.js</string></array>
-  <key>WorkingDirectory</key><string>$DATA</string>
-  <key>EnvironmentVariables</key><dict><key>PHONELAB_DATA</key><string>$DATA</string><key>HOME</key><string>$HOME</string><key>PATH</key><string>/usr/bin:/bin</string></dict>
-  <key>RunAtLoad</key><true/><key>KeepAlive</key><true/>
-  <key>StandardOutPath</key><string>$DATA/logs/warmup.log</string><key>StandardErrorPath</key><string>$DATA/logs/warmup.log</string>
-</dict></plist>
-P
-launchctl bootout "gui/$(id -u)/com.phonelab.warmup" >/dev/null 2>&1; sleep 1
-launchctl bootstrap "gui/$(id -u)" "$WL" >> "$DATA/logs/app.log" 2>&1
 echo "$VER" > "$DATA/.installed-version"
 # phone-lab Desk wird auf diesem Mac nicht mehr gebraucht (das Fenster ist jetzt in dieser App); VAs nutzen es weiter
 # Tailscale-Freigabe, falls Tailscale da ist und noch nichts freigegeben wurde
