@@ -736,7 +736,9 @@ const phaseText = d => PHASE_TEXT[d.phase] || (d.reason ? `Phone offline: ${d.re
 function restartWda(id) { post(id, 'restart').then(j => { if (j && j.ok) { note(id, 'Restarting WDA'); refresh(); } }); }
 function refreshStatus() {
   for (const d of statusCache) $$(`[data-id="${d.id}"].tile`).forEach(el => {
-    el.classList.toggle('locked', heldByPerson(d)); el.classList.toggle('offline', !d.ready);
+    // no cover over the picture: the phones run around the clock, picture and controls always stay;
+    // only the dot and text in the header show the state (Restart WDA lives in the large view)
+    el.classList.toggle('locked', heldByPerson(d));
     el.classList.toggle('asleep', !!d.locked);
     const busy = ['starting', 'restarting', 'rebooting', 'preparing'].includes(d.phase);
     const dot = $('.dot', el); dot.classList.toggle('on', d.ready); dot.classList.toggle('starting', !d.ready && busy);
