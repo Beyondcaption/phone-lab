@@ -36,6 +36,34 @@
       "udid": "00008110-000971060268401E",
       "wda_port": 8105,
       "mjpeg_port": 9105
+    },
+    {
+      "id": 6,
+      "name": "Phone 6",
+      "udid": "00008110-001A18A834A2401E",
+      "wda_port": 8106,
+      "mjpeg_port": 9106
+    },
+    {
+      "id": 7,
+      "name": "Phone 7",
+      "udid": "00008101-0013183C3468001E",
+      "wda_port": 8107,
+      "mjpeg_port": 9107
+    },
+    {
+      "id": 8,
+      "name": "Phone 8",
+      "udid": "00008110-00104838027B801E",
+      "wda_port": 8108,
+      "mjpeg_port": 9108
+    },
+    {
+      "id": 9,
+      "name": "Phone 9",
+      "udid": "00008110-001870C93408401E",
+      "wda_port": 8109,
+      "mjpeg_port": 9109
     }
   ],
   "apps": {
