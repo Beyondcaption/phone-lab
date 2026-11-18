@@ -9,6 +9,8 @@ const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
 const CFG = JSON.parse(fs.readFileSync(path.join(ROOT, 'devices.json'), 'utf8'));
+// FAKE_TALL=7: Handy 7 ist ein iPhone 12 (390 x 844, Bilder test/frames/p7_* mit roten Rändern oben und unten)
+const TALL = String(process.env.FAKE_TALL || '').split(',').filter(Boolean).map(Number);
 const STOP = String(process.env.FAKE_STOP || '').split(',').filter(Boolean).map(Number);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 // FAKE_SLOW=5: Handy 5 braucht 10 s je Eingabe und für den Bildschirmtext (ein hängendes WDA)
@@ -16,7 +18,9 @@ const SLOW = String(process.env.FAKE_SLOW || '').split(',').filter(Boolean).map(
 
 for (const dev of CFG.devices) {
   const s = { calls: 0, maxParallel: 0, active: 0, actions: [], app: 'com.apple.springboard' };
-  const frames = fs.readdirSync(path.join(__dirname, 'frames')).filter(f => f.startsWith(`p${dev.id}_`)).map(f => fs.readFileSync(path.join(__dirname, 'frames', f)));
+  // Handys ohne eigene Testbilder zeigen die von Handy 1
+  const load = id => fs.readdirSync(path.join(__dirname, 'frames')).filter(f => f.startsWith(`p${id}_`)).map(f => fs.readFileSync(path.join(__dirname, 'frames', f)));
+  const frames = load(dev.id).length ? load(dev.id) : load(1);
   http.createServer(async (req, res) => {
     const send = (v, extra = {}) => { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ value: v, sessionId: 's1', ...extra })); };
     let body = ''; for await (const c of req) body += c;
@@ -31,7 +35,7 @@ for (const dev of CFG.devices) {
     if (u === '/status') { if (Date.now() < (s.hangUntil || 0)) await sleep(s.hangUntil - Date.now()); return send({ ready: true }); }
     if (u === '/session' && req.method === 'POST') { s.sessions = (s.sessions || 0) + 1; return send({ sessionId: 's1' }); }
     if (s.drop && u.endsWith('/actions')) { s.drop = false; return req.socket.destroy(); }
-    if (u.endsWith('/window/size')) return send({ width: 375, height: 667 });
+    if (u.endsWith('/window/size')) return send(TALL.includes(dev.id) ? { width: 390, height: 844 } : { width: 375, height: 667 });
     if (u.endsWith('/appium/settings')) return send({});
     if (u.endsWith('/wda/batteryInfo')) return send({ level: 0.5 + dev.id / 20, state: 2 });
     if (u.endsWith('/wda/activeAppInfo')) return send({ bundleId: s.app });
